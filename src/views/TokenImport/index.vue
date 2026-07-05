@@ -1,0 +1,2852 @@
+<template>
+  <div class="token-import-page" :class="{ 'in-app-layout': inAppLayout }">
+    <OrbBackground
+      v-if="!inAppLayout"
+      class="account-orb-background"
+      :hue="accountOrbHue"
+      :hover-intensity="0.42"
+      :background-color="accountOrbBackground"
+    />
+    <div class="container">
+      <!-- 页面头部 -->
+      <div class="page-header">
+        <div class="header-content">
+          <div v-if="!inAppLayout" class="header-top">
+            <img src="/icons/codex-icon.svg" alt="北冕之王" class="brand-logo" />
+            <!-- 主题切换按钮 -->
+            <ThemeToggle />
+          </div>
+          <h1>账号管理</h1>
+        </div>
+      </div>
+
+      <!-- 限流等待提示 -->
+      <n-alert
+        v-if="rateLimitWaiting"
+        type="warning"
+        style="margin-bottom: 16px"
+      >
+        {{ rateLimitMessage }}
+      </n-alert>
+
+      <!-- Token导入区域 -->
+      <a-modal
+        class="token-import-modal"
+        v-model:visible="showImportForm"
+        width="40rem"
+        :footer="false"
+        :default-visible="!inAppLayout && !tokenStore.hasTokens"
+      >
+        <template #title>
+          <h2>
+            添加游戏Token
+          </h2>
+        </template>
+        <div class="card-header">
+          <!-- 导入方式选择 -->
+          <n-radio-group
+            v-model:value="importMethod"
+            class="import-method-tabs"
+            size="small"
+          >
+            <n-radio-button value="wxQrcode"> 微信扫码获取 </n-radio-button>
+            <n-radio-button value="singlebin"> BIN单角色获取 </n-radio-button>
+            <!-- 以下入口保留代码但隐藏，当前只展示微信扫码和BIN单角色获取 -->
+            <n-radio-button v-show="false" value="manual"> 手动输入 </n-radio-button>
+            <n-radio-button v-show="false" value="url"> URL获取 </n-radio-button>
+            <n-radio-button v-show="false" value="bin"> BIN多角色获取 </n-radio-button>
+          </n-radio-group>
+        </div>
+        <div class="card-body">
+          <wx-qrcode-form
+            @cancel="() => (showImportForm = false)"
+            @ok="() => (showImportForm = false)"
+            v-if="importMethod === 'wxQrcode'"
+          />
+          <single-bin-token-form
+            @cancel="() => (showImportForm = false)"
+            @ok="() => (showImportForm = false)"
+            v-if="importMethod === 'singlebin'"
+          />
+          <manual-token-form
+            v-show="false"
+            @cancel="() => (showImportForm = false)"
+            @ok="() => (showImportForm = false)"
+            v-if="importMethod === 'manual'"
+          />
+          <url-token-form
+            v-show="false"
+            @cancel="() => (showImportForm = false)"
+            @ok="() => (showImportForm = false)"
+            v-if="importMethod === 'url'"
+          />
+          <bin-token-form
+            v-show="false"
+            @cancel="() => (showImportForm = false)"
+            @ok="() => (showImportForm = false)"
+            v-if="importMethod === 'bin'"
+          />
+        </div>
+      </a-modal>
+
+      <!-- Token列表 -->
+      <div v-if="tokenStore.hasTokens" class="tokens-section">
+        <div class="section-header">
+          <n-space align="center">
+            <h2>我的账号列表 ({{ tokenStore.gameTokens.length }}个)</h2>
+            <!-- 视图切换保留代码但隐藏，当前默认使用卡片视图 -->
+            <n-radio-group v-show="false" v-model:value="viewMode" size="small">
+              <n-radio-button value="list">列表</n-radio-button>
+              <n-radio-button value="card">卡片</n-radio-button>
+            </n-radio-group>
+            <!-- 排序按钮保留代码但隐藏，当前默认按创建时间排序 -->
+            <n-divider v-show="false" vertical style="height: 24px"></n-divider>
+            <n-button-group v-show="false" size="small">
+              <n-button
+                @click="toggleSort('name')"
+                :type="sortConfig.field === 'name' ? 'primary' : 'default'"
+              >
+                名称 {{ getSortIcon("name") }}
+              </n-button>
+              <n-button
+                @click="toggleSort('server')"
+                :type="sortConfig.field === 'server' ? 'primary' : 'default'"
+              >
+                服务器 {{ getSortIcon("server") }}
+              </n-button>
+              <n-button
+                @click="toggleSort('createdAt')"
+                :type="sortConfig.field === 'createdAt' ? 'primary' : 'default'"
+              >
+                创建时间 {{ getSortIcon("createdAt") }}
+              </n-button>
+              <n-button
+                @click="toggleSort('lastUsed')"
+                :type="sortConfig.field === 'lastUsed' ? 'primary' : 'default'"
+              >
+                最后使用 {{ getSortIcon("lastUsed") }}
+              </n-button>
+            </n-button-group>
+          </n-space>
+          <div class="header-actions">
+            <n-button type="success" @click="goToBatchDailyTasks">
+              <template #icon>
+                <n-icon>
+                  <List />
+                </n-icon>
+              </template>
+              批量功能
+            </n-button>
+
+            <n-button
+              v-if="!showImportForm"
+              type="primary"
+              @click="showImportForm = true"
+            >
+              添加Token
+            </n-button>
+
+            <n-dropdown :options="bulkOptions" @select="handleBulkAction">
+              <n-button>
+                <template #icon>
+                  <n-icon>
+                    <Menu />
+                  </n-icon>
+                </template>
+                批量操作
+              </n-button>
+            </n-dropdown>
+          </div>
+        </div>
+
+        <div class="tokens-grid" v-if="viewMode === 'card'">
+          <a-card
+            v-for="(token, index) in sortedTokens"
+            :key="token.id"
+            draggable="true"
+            @dragstart="handleDragStart(index, $event)"
+            @dragover="handleDragOver($event)"
+            @drop="handleDrop(index, $event)"
+            :class="{
+              'token-card': true,
+              active: selectedTokenId === token.id,
+            }"
+            @click="selectToken(token)"
+          >
+            <template #title>
+              <a-space class="token-name" align="center">
+                <n-avatar
+                  v-if="token.avatar"
+                  :src="token.avatar"
+                  round
+                  size="small"
+                  fallback-src="/icons/xiaoyugan.png"
+                />
+                <span class="token-title-text">{{ token.name }}</span>
+                <a-tag
+                  :color="getServerTagColor(token.id)"
+                  v-if="token.server"
+                  >{{ token.server }}</a-tag
+                >
+                <!-- 连接状态指示器 -->
+                <a-badge
+                  :status="getTokenStyle(token.id)"
+                  :text="getConnectionStatusText(token.id)"
+                />
+                <!-- 连接状态文字 -->
+                <!-- <a-tag color="green">
+                  {{ getConnectionStatusText(token.id) }}
+                </a-tag> -->
+              </a-space>
+            </template>
+            <template #extra>
+              <n-space class="token-card-actions" size="small" @click.stop>
+                <n-button size="small" @click.stop="editToken(token)">
+                  <template #icon>
+                    <n-icon>
+                      <Create />
+                    </n-icon>
+                  </template>
+                  编辑
+                </n-button>
+                <n-button
+                  size="small"
+                  type="error"
+                  ghost
+                  @click.stop="deleteToken(token)"
+                >
+                  <template #icon>
+                    <n-icon>
+                      <TrashBin />
+                    </n-icon>
+                  </template>
+                  删除
+                </n-button>
+              </n-space>
+              <!-- 原下拉菜单保留代码但隐藏，编辑/删除已移动到外层按钮，其他菜单项不显示 -->
+              <n-dropdown
+                v-show="false"
+                :options="getTokenActions(token)"
+                @select="(key) => handleTokenAction(key, token)"
+              >
+                <n-button v-show="false" text>
+                  <template #icon>
+                    <n-icon>
+                      <EllipsisHorizontal />
+                    </n-icon>
+                  </template>
+                </n-button>
+              </n-dropdown>
+            </template>
+
+            <template #default>
+              <!-- Token信息保留代码但隐藏 -->
+              <div v-show="false" class="token-display">
+                <span class="token-label">Token:</span>
+                <code class="token-value">{{ maskToken(token.token) }}</code>
+              </div>
+
+              <!-- 备注信息保留代码但隐藏 -->
+              <div
+                v-show="false"
+                v-if="editingRemark === token.id"
+                class="token-remark token-remark-edit"
+                @click.stop
+              >
+                <span class="remark-label">备注：</span>
+                <n-input
+                  v-model:value="tempRemarks[token.id]"
+                  type="textarea"
+                  :rows="2"
+                  placeholder="添加备注信息..."
+                  @blur="saveRemark(token)"
+                  @keyup.enter="saveRemark(token)"
+                  @keyup.esc="cancelEditRemark()"
+                  autofocus
+                />
+              </div>
+              <div
+                v-show="false"
+                v-else
+                class="token-remark"
+                @click.stop="startEditRemark(token)"
+              >
+                <span class="remark-label">备注：</span>
+                <span class="remark-value">{{
+                  token.remark || "点击添加备注"
+                }}</span>
+                <n-icon style="margin-left: 4px; color: var(--text-tertiary)">
+                  <Create />
+                </n-icon>
+              </div>
+
+              <!-- 重新获取按钮保留代码但隐藏 -->
+              <a-button
+                v-show="false"
+                :loading="refreshingTokens.has(token.id)"
+                @click.stop="refreshToken(token)"
+              >
+                <template #icon>
+                  <n-icon>
+                    <Refresh />
+                  </n-icon>
+                </template>
+                {{ token.sourceUrl ? "刷新" : "重新获取" }}
+              </a-button>
+
+              <!-- 创建/使用时间信息保留代码但隐藏 -->
+              <div v-show="false" class="token-timestamps">
+                <div class="timestamp-item">
+                  <span class="timestamp-label">创建：</span>
+                  <span class="timestamp-value">{{
+                    formatTime(token.createdAt)
+                  }}</span>
+                </div>
+                <div class="timestamp-item">
+                  <span class="timestamp-label">使用：</span>
+                  <span class="timestamp-value">{{
+                    formatTime(token.lastUsed)
+                  }}</span>
+                </div>
+                <!-- 升级选项保留代码但隐藏，当前界面只展示存储类型 -->
+                <div
+                  v-show="false"
+                  v-if="
+                    !(
+                      token.importMethod === 'url' ||
+                      token.importMethod === 'bin' ||
+                      token.importMethod === 'wxQrcode' ||
+                      token.upgradedToPermanent
+                    )
+                  "
+                  class="storage-upgrade hidden-token-actions"
+                >
+                  <n-button
+                    size="tiny"
+                    type="success"
+                    ghost
+                    @click.stop="upgradeTokenToPermanent(token)"
+                  >
+                    <template #icon>
+                      <n-icon>
+                        <Star />
+                      </n-icon>
+                    </template>
+                    升级为长期有效
+                  </n-button>
+                </div>
+              </div>
+
+              <!-- 存储类型信息 -->
+              <div class="storage-info">
+                <div class="storage-item">
+                  <span class="storage-label">存储类型：</span>
+                  <n-tag
+                    size="small"
+                    :type="
+                      token.importMethod === 'url' ||
+                      token.importMethod === 'bin' ||
+                      token.importMethod === 'wxQrcode' ||
+                      token.upgradedToPermanent
+                        ? 'success'
+                        : 'warning'
+                    "
+                  >
+                    {{
+                      token.importMethod === "url" ||
+                      token.importMethod === "bin" ||
+                      token.importMethod === "wxQrcode" ||
+                      token.upgradedToPermanent
+                        ? "长期有效"
+                        : "临时存储"
+                    }}
+                  </n-tag>
+                </div>
+              </div>
+            </template>
+            <template #actions>
+              <n-button
+                type="primary"
+                size="large"
+                block
+                :loading="connectingTokens.has(token.id)"
+                @click="startTaskManagement(token)"
+              >
+                <template #icon>
+                  <n-icon>
+                    <Grid />
+                  </n-icon>
+                </template>
+                进入游戏功能
+              </n-button>
+            </template>
+          </a-card>
+        </div>
+
+        <!-- List View -->
+        <div class="tokens-list" v-else>
+          <n-card
+            v-for="(token, index) in sortedTokens"
+            :key="token.id"
+            draggable="true"
+            @dragstart="handleDragStart(index, $event)"
+            @dragover="handleDragOver($event)"
+            @drop="handleDrop(index, $event)"
+            size="small"
+            style="margin-bottom: 8px"
+            hoverable
+            @click="selectToken(token)"
+            :class="{ active: selectedTokenId === token.id }"
+          >
+            <n-space justify="space-between" align="center">
+              <!-- Info -->
+              <n-space align="center" :size="6">
+                <!-- 连接状态 - 移动到最前端显示 -->
+                <div style="min-width: 65px">
+                  <a-badge
+                    :status="getTokenStyle(token.id)"
+                    :text="getConnectionStatusText(token.id)"
+                  />
+                </div>
+                <!-- Avatar -->
+                <n-avatar
+                  v-if="token.avatar"
+                  :src="token.avatar"
+                  round
+                  size="small"
+                  fallback-src="/icons/xiaoyugan.png"
+                />
+
+                <!-- Token基本信息 -->
+                <div style="min-width: 100px">
+                  <div
+                    style="
+                      display: flex;
+                      align-items: center;
+                      flex-wrap: wrap;
+                      gap: 2px;
+                    "
+                  >
+                    <span style="font-weight: bold; font-size: 0.95em">{{
+                      token.name
+                    }}</span>
+                    <n-tag
+                      size="small"
+                      :type="getServerTagType(token.id)"
+                      v-if="token.server"
+                      >{{ token.server }}</n-tag
+                    >
+                    <!-- 备注信息 - 显示在服务器信息后面 -->
+                    <div
+                      v-if="editingRemark === token.id"
+                      style="
+                        font-size: 0.75em;
+                        display: flex;
+                        align-items: center;
+                        gap: 4px;
+                      "
+                      @click.stop
+                    >
+                      <i
+                        class="i-mdi:note-outline"
+                        style="margin-right: 1px"
+                      ></i>
+                      <n-input
+                        v-model:value="tempRemarks[token.id]"
+                        size="small"
+                        placeholder="添加备注..."
+                        @blur="saveRemark(token)"
+                        @keyup.enter="saveRemark(token)"
+                        @keyup.esc="cancelEditRemark()"
+                        autofocus
+                        style="width: 150px"
+                      />
+                    </div>
+                    <div
+                      v-else
+                      style="
+                        font-size: 0.75em;
+                        color: var(--text-secondary);
+                        white-space: nowrap;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        gap: 4px;
+                      "
+                      @click.stop="startEditRemark(token)"
+                    >
+                      <i
+                        class="i-mdi:note-outline"
+                        style="margin-right: 1px"
+                      ></i>
+                      {{ token.remark || "点击添加备注" }}
+                      <n-icon
+                        style="font-size: 0.8em; color: var(--text-tertiary)"
+                      >
+                        <Create />
+                      </n-icon>
+                    </div>
+                  </div>
+                </div>
+              </n-space>
+
+              <!-- Actions -->
+              <n-space>
+                <!-- 存储类型 -->
+                <n-tag
+                  size="small"
+                  :type="
+                    token.importMethod === 'url' ||
+                    token.importMethod === 'bin' ||
+                    token.importMethod === 'wxQrcode' ||
+                    token.upgradedToPermanent
+                      ? 'success'
+                      : 'warning'
+                  "
+                >
+                  {{
+                    token.importMethod === "url" ||
+                    token.importMethod === "bin" ||
+                    token.importMethod === "wxQrcode" ||
+                    token.upgradedToPermanent
+                      ? "长期"
+                      : "临时"
+                  }}
+                </n-tag>
+
+                <!-- 操作按钮保留代码但隐藏，当前界面只展示存储类型 -->
+                <div v-show="false" class="hidden-token-actions">
+                  <n-button
+                    v-if="
+                      !(
+                        token.importMethod === 'url' ||
+                        token.importMethod === 'bin' ||
+                        token.importMethod === 'wxQrcode' ||
+                        token.upgradedToPermanent
+                      )
+                    "
+                    size="small"
+                    type="success"
+                    ghost
+                    @click.stop="upgradeTokenToPermanent(token)"
+                  >
+                    <template #icon>
+                      <n-icon>
+                        <Star />
+                      </n-icon>
+                    </template>
+                    升级
+                  </n-button>
+
+                  <n-button
+                    size="small"
+                    type="primary"
+                    :loading="connectingTokens.has(token.id)"
+                    @click.stop="startTaskManagement(token)"
+                  >
+                    <template #icon>
+                      <n-icon>
+                        <Grid />
+                      </n-icon>
+                    </template>
+                    游戏功能
+                  </n-button>
+                  <n-button
+                    size="small"
+                    @click.stop="refreshToken(token)"
+                    :loading="refreshingTokens.has(token.id)"
+                  >
+                    <template #icon>
+                      <n-icon>
+                        <Refresh />
+                      </n-icon>
+                    </template>
+                    刷新
+                  </n-button>
+                  <n-dropdown
+                    :options="getTokenActions(token)"
+                    @select="(key) => handleTokenAction(key, token)"
+                  >
+                    <n-button size="small" circle @click.stop>
+                      <template #icon>
+                        <n-icon>
+                          <EllipsisHorizontal />
+                        </n-icon>
+                      </template>
+                    </n-button>
+                  </n-dropdown>
+                </div>
+              </n-space>
+            </n-space>
+          </n-card>
+        </div>
+      </div>
+
+      <!-- 空状态 -->
+      <a-empty
+        v-if="!tokenStore.hasTokens && !showImportForm"
+        class="account-empty-state"
+      >
+        <template #image>
+          <i class="mdi:bed-empty"></i>
+        </template>
+        还没有添加任何账号
+        <a-button type="primary" @click="openshowImportForm"
+          >添加账号</a-button
+        >
+      </a-empty>
+    </div>
+
+    <!-- 编辑Token模态框 -->
+    <n-modal
+      v-model:show="showEditModal"
+      preset="card"
+      title="编辑Token"
+      style="width: 500px"
+    >
+      <n-form
+        ref="editFormRef"
+        :model="editForm"
+        :rules="editRules"
+        label-placement="left"
+        label-width="80px"
+      >
+        <n-form-item label="名称" path="name">
+          <n-input v-model:value="editForm.name" />
+        </n-form-item>
+        <n-form-item label="Token字符串" path="token">
+          <n-input
+            v-model:value="editForm.token"
+            type="textarea"
+            :rows="3"
+            placeholder="粘贴Token字符串..."
+            clearable
+          />
+        </n-form-item>
+        <n-form-item label="服务器">
+          <n-input v-model:value="editForm.server" />
+        </n-form-item>
+        <n-form-item label="WebSocket地址">
+          <n-input v-model:value="editForm.wsUrl" />
+        </n-form-item>
+        <n-form-item label="备注">
+          <n-input
+            v-model:value="editForm.remark"
+            type="textarea"
+            :rows="2"
+            placeholder="添加备注信息..."
+          />
+        </n-form-item>
+      </n-form>
+
+      <template #footer>
+        <div class="modal-actions">
+          <n-button @click="showEditModal = false"> 取消 </n-button>
+          <n-button type="primary" @click="saveEdit"> 保存 </n-button>
+        </div>
+      </template>
+    </n-modal>
+  </div>
+</template>
+
+<script setup>
+import BinTokenForm from "./bin.vue";
+import ManualTokenForm from "./manual.vue";
+import singleBinTokenForm from "./singlebin.vue";
+import UrlTokenForm from "./url.vue";
+import WxQrcodeForm from "./wxqrcode.vue";
+
+import OrbBackground from "@/components/Common/OrbBackground.vue";
+import { useTheme } from "@/composables/useTheme";
+import { useTokenStore, selectedTokenId } from "@/stores/tokenStore";
+import {
+  Copy,
+  Create,
+  EllipsisHorizontal,
+  Grid,
+  List,
+  Key,
+  Menu,
+  Refresh,
+  Star,
+  SyncCircle,
+  TrashBin,
+} from "@vicons/ionicons5";
+import { NIcon, NAlert, useDialog, useMessage } from "naive-ui";
+import { computed, h, onMounted, onUnmounted, reactive, ref, watch } from "vue";
+import { useRouter } from "vue-router";
+import { transformToken, scheduleAuthUserRequest } from "@/utils/token";
+import { $emit } from "@/stores/events/index.ts";
+import useIndexedDB from "@/hooks/useIndexedDB";
+const { getArrayBuffer, storeArrayBuffer, deleteArrayBuffer, clearAll } =
+  useIndexedDB();
+// 接收路由参数
+const props = defineProps({
+  token: String,
+  name: String,
+  server: String,
+  wsUrl: String,
+  api: String,
+  auto: Boolean,
+  inAppLayout: Boolean,
+});
+
+const router = useRouter();
+const message = useMessage();
+const dialog = useDialog();
+const tokenStore = useTokenStore();
+const { isDark } = useTheme();
+const inAppLayout = computed(() => props.inAppLayout);
+const accountHomePath = computed(() =>
+  inAppLayout.value ? "/admin/account-management" : "/tokens",
+);
+const accountOrbHue = computed(() => (isDark.value ? 218 : 18));
+const accountOrbBackground = computed(() =>
+  isDark.value ? "#0f172a" : "#f3f5fb",
+);
+
+// 限流等待状态
+const rateLimitWaiting = ref(false);
+const rateLimitMessage = ref("");
+
+// 响应式数据
+const showImportForm = ref(false);
+const isImporting = ref(false);
+const showEditModal = ref(false);
+const importFormRef = ref(null);
+const urlFormRef = ref(null);
+const editFormRef = ref(null);
+const editingToken = ref(null);
+const importMethod = ref("singlebin");
+const refreshingTokens = ref(new Set());
+const connectingTokens = ref(new Set());
+// 视图切换入口已隐藏，默认固定显示卡片视图
+const viewMode = ref("card");
+const dragIndex = ref(null);
+
+// 备注编辑状态管理
+const editingRemark = ref(null); // 当前正在编辑备注的tokenId
+const tempRemarks = ref({}); // 临时保存编辑中的备注内容
+
+// 监听视图模式变化，保存到localStorage
+watch(viewMode, (newViewMode) => {
+  localStorage.setItem("tokenViewMode", newViewMode);
+});
+
+// 排序状态管理 - 按钮已隐藏，默认固定使用创建时间排序
+const savedSortConfig = localStorage.getItem("tokenSortConfig");
+const sortConfig = ref({
+  field: "createdAt", // 排序字段：name, server, createdAt, lastUsed
+  direction: "asc", // 排序方向：asc, desc
+});
+
+// 排序后的游戏角色Token列表
+const sortedTokens = computed(() => {
+  if (sortConfig.value.field === "manual") {
+    return tokenStore.gameTokens;
+  }
+
+  return [...tokenStore.gameTokens].sort((tokenA, tokenB) => {
+    let valueA, valueB;
+
+    // 根据排序字段获取比较值
+    switch (sortConfig.value.field) {
+      case "name":
+        valueA = tokenA.name?.toLowerCase() || "";
+        valueB = tokenB.name?.toLowerCase() || "";
+        break;
+      case "server":
+        valueA = tokenA.server?.toLowerCase() || "";
+        valueB = tokenB.server?.toLowerCase() || "";
+        break;
+      case "createdAt":
+        valueA = new Date(tokenA.createdAt || 0).getTime();
+        valueB = new Date(tokenB.createdAt || 0).getTime();
+        break;
+      case "lastUsed":
+        valueA = new Date(tokenA.lastUsed || 0).getTime();
+        valueB = new Date(tokenB.lastUsed || 0).getTime();
+        break;
+      default:
+        valueA = tokenA.name?.toLowerCase() || "";
+        valueB = tokenB.name?.toLowerCase() || "";
+    }
+
+    // 根据排序方向比较值
+    if (valueA < valueB) {
+      return sortConfig.value.direction === "asc" ? -1 : 1;
+    }
+    if (valueA > valueB) {
+      return sortConfig.value.direction === "asc" ? 1 : -1;
+    }
+    return 0;
+  });
+});
+
+// 切换排序
+const toggleSort = (field) => {
+  if (sortConfig.value.field === field) {
+    // 如果点击的是当前排序字段，则切换排序方向
+    sortConfig.value.direction =
+      sortConfig.value.direction === "asc" ? "desc" : "asc";
+  } else {
+    // 如果点击的是新的排序字段，则默认升序
+    sortConfig.value.field = field;
+    sortConfig.value.direction = "asc";
+  }
+
+  // 保存排序设置到localStorage
+  localStorage.setItem("tokenSortConfig", JSON.stringify(sortConfig.value));
+};
+
+// 获取排序图标
+const getSortIcon = (field) => {
+  if (sortConfig.value.field !== field) return null;
+  return sortConfig.value.direction === "asc" ? "↑" : "↓";
+};
+
+const handleDragStart = (index, event) => {
+  dragIndex.value = index;
+  event.dataTransfer.effectAllowed = "move";
+  // 可以在这里设置拖拽时的预览图等
+};
+
+const handleDragOver = (event) => {
+  event.preventDefault(); // 允许放置
+  event.dataTransfer.dropEffect = "move";
+};
+
+const handleDrop = (index, event) => {
+  event.preventDefault();
+  if (dragIndex.value === null || dragIndex.value === index) return;
+
+  // 使用当前显示的列表（sortedTokens）来进行重新排序
+  // 这样可以确保用户看到的顺序就是最终保存的顺序
+  const currentTokens = [...sortedTokens.value];
+  const draggedItem = currentTokens[dragIndex.value];
+
+  // 移动元素
+  currentTokens.splice(dragIndex.value, 1);
+  currentTokens.splice(index, 0, draggedItem);
+
+  // 更新 store
+  tokenStore.gameTokens = currentTokens;
+
+  // 切换到手动排序模式，防止自动排序打乱顺序
+  sortConfig.value.field = "manual";
+  // 保存排序设置
+  localStorage.setItem("tokenSortConfig", JSON.stringify(sortConfig.value));
+
+  dragIndex.value = null;
+  message.success("Token 顺序已更新");
+};
+
+// 编辑表单
+const editForm = reactive({
+  name: "",
+  token: "",
+  server: "",
+  wsUrl: "",
+  remark: "",
+});
+
+const editRules = {
+  name: [{ required: true, message: "请输入Token名称", trigger: "blur" }],
+  token: [{ required: true, message: "请输入Token字符串", trigger: "blur" }],
+};
+
+const bulkOptions = [
+  { label: "刷新所有Token", key: "refreshAll" },
+  { label: "更新token信息", key: "updateInfo" },
+  { label: "导出所有Token", key: "export" },
+  { label: "导入Token文件", key: "import" },
+  { label: "清理过期Token", key: "clean" },
+  { label: "断开所有连接", key: "disconnect" },
+  { label: "清除所有Token", key: "clear" },
+];
+
+/**
+ * 手动打开账号管理卡片
+ */
+const openshowImportForm = () => {
+  showImportForm.value = true;
+};
+
+// 刷新Token
+const refreshToken = async (token) => {
+  refreshingTokens.value.add(token.id);
+
+  try {
+    if (token.importMethod === "url") {
+      // 有源URL的token - 从URL重新获取（使用限流）
+      const data = await scheduleAuthUserRequest(async () => {
+        let response;
+
+        const isLocalUrl =
+          token.sourceUrl.startsWith(window.location.origin) ||
+          token.sourceUrl.startsWith("/") ||
+          token.sourceUrl.startsWith("http://localhost") ||
+          token.sourceUrl.startsWith("http://127.0.0.1");
+
+        if (isLocalUrl) {
+          response = await fetch(token.sourceUrl);
+        } else {
+          try {
+            response = await fetch(token.sourceUrl, {
+              method: "GET",
+              headers: {
+                Accept: "application/json",
+              },
+              mode: "cors",
+            });
+          } catch (corsError) {
+            throw new Error(
+              `跨域请求被阻止。请确保目标服务器支持CORS。错误详情: ${corsError.message}`,
+            );
+          }
+        }
+
+        if (!response.ok) {
+          throw new Error(
+            `请求失败: ${response.status} ${response.statusText}`,
+          );
+        }
+
+        const result = await response.json();
+
+        if (!result.token) {
+          throw new Error("返回数据中未找到token字段");
+        }
+
+        return result;
+      });
+
+      // 更新token信息
+      tokenStore.updateToken(token.id, {
+        token: data.token,
+        server: data.server || token.server,
+        lastRefreshed: Date.now(),
+      });
+
+      message.success("Token刷新成功");
+    } else if (
+      token.importMethod === "wxQrcode" ||
+      token.importMethod === "bin"
+    ) {
+      let userToken = await getArrayBuffer(token.id);
+      let usedOldKey = false;
+      if (!userToken) {
+        userToken = await getArrayBuffer(token.name);
+        usedOldKey = true;
+      }
+      if (userToken) {
+        const newToken = await transformToken(userToken);
+        tokenStore.updateToken(token.id, {
+          token: newToken,
+          lastRefreshed: Date.now(),
+        });
+        if (usedOldKey) {
+          await storeArrayBuffer(token.id, userToken);
+          await deleteArrayBuffer(token.name);
+          console.log("已迁移IndexedDB数据:", token.name, "->", token.id);
+        }
+        message.success("Token刷新成功");
+      }
+    } else {
+      dialog.info({
+        title: "重新获取Token",
+        content: `Token "${token.name}" 是通过微信扫码登录导入的，没有配置自动刷新地址。
+
+请选择以下操作：
+1. 重新手动导入新的Token
+2. 尝试重新连接现有Token`,
+        positiveText: "重新导入",
+        negativeText: "重新连接",
+        onPositiveClick: () => {
+          showImportForm.value = true;
+          importMethod.value = "singlebin";
+          importForm.name = token.name;
+          importForm.server = token.server;
+          importForm.wsUrl = token.wsUrl;
+        },
+        onNegativeClick: () => {
+          // 断开现有连接
+          if (tokenStore.getWebSocketStatus(token.id) === "connected") {
+            tokenStore.closeWebSocketConnection(token.id);
+          }
+
+          // 尝试重新连接
+          setTimeout(() => {
+            tokenStore.createWebSocketConnection(
+              token.id,
+              token.token,
+              token.wsUrl,
+            );
+            message.info("正在尝试重新连接...");
+          }, 500);
+        },
+      });
+      return;
+    }
+
+    // 如果当前token有连接，需要重新连接
+    if (tokenStore.getWebSocketStatus(token.id) === "connected") {
+      tokenStore.closeWebSocketConnection(token.id);
+      setTimeout(() => {
+        tokenStore.createWebSocketConnection(
+          token.id,
+          token.token,
+          token.wsUrl,
+        );
+      }, 500);
+    }
+  } catch (error) {
+    console.error("刷新Token失败:", error);
+    message.error(error.message || "Token刷新失败");
+  } finally {
+    refreshingTokens.value.delete(token.id);
+    // 关闭限流等待提示
+    rateLimitWaiting.value = false;
+  }
+};
+
+// 升级Token为长期有效
+const upgradeTokenToPermanent = (token) => {
+  dialog.warning({
+    title: "升级为长期有效",
+    content: `确认要将Token "${token.name}" 升级为长期有效吗？升级后该Token将不会因24小时未使用而被自动清理。`,
+    positiveText: "确认升级",
+    negativeText: "取消",
+    onPositiveClick: () => {
+      const success = tokenStore.upgradeTokenToPermanent(token.id);
+      if (success) {
+        message.success(`Token "${token.name}" 已升级为长期有效！`);
+      } else {
+        message.error("升级失败，该Token可能已经是长期有效状态");
+      }
+    },
+  });
+};
+
+const selectToken = (token, forceReconnect = false) => {
+  // 如果有备注正在编辑，保存备注并取消编辑
+  if (editingRemark.value) {
+    saveCurrentRemark();
+    return;
+  }
+
+  const isAlreadySelected = selectedTokenId.value === token.id;
+  const connectionStatus = getConnectionStatus(token.id);
+
+  // 降噪日志已移除
+
+  // 如果已经选中且已连接，断开连接
+  if (
+    isAlreadySelected &&
+    connectionStatus === "connected" &&
+    !forceReconnect
+  ) {
+    // 断开连接
+    tokenStore.closeWebSocketConnection(token.id);
+    message.success(`已断开 ${token.name} 的连接`);
+    return;
+  }
+
+  // 如果未选中但已连接，断开连接
+  if (
+    !isAlreadySelected &&
+    connectionStatus === "connected" &&
+    !forceReconnect
+  ) {
+    // 断开连接
+    tokenStore.closeWebSocketConnection(token.id);
+    message.success(`已断开 ${token.name} 的连接`);
+    return;
+  }
+
+  // 如果已经选中但正在连接，也不执行操作
+  if (
+    isAlreadySelected &&
+    connectionStatus === "connecting" &&
+    !forceReconnect
+  ) {
+    message.info(`${token.name} 正在连接中...`);
+    return;
+  }
+
+  // 选择token（带智能连接判断）
+  const result = tokenStore.selectToken(token.id, forceReconnect);
+
+  if (result) {
+    if (forceReconnect) {
+      message.success(`强制重连：${token.name}`);
+    } else if (isAlreadySelected) {
+      message.success(`重新连接：${token.name}`);
+    } else {
+      message.success(`已选择：${token.name}`);
+    }
+  } else {
+    message.error(`选择Token失败：${token.name}`);
+  }
+};
+
+const getConnectionStatus = (tokenId) => {
+  return tokenStore.getWebSocketStatus(tokenId);
+};
+
+const getConnectionStatusText = (tokenId) => {
+  const status = getConnectionStatus(tokenId);
+  const statusMap = {
+    connected: "已连接",
+    connecting: "连接中...",
+    disconnected: "已断开",
+    error: "连接错误",
+    disconnecting: "断开中...",
+  };
+  return statusMap[status] || "未连接";
+};
+
+const getTokenStyle = (tokenId) => {
+  const status = getConnectionStatus(tokenId);
+  const statusMap = {
+    connected: "success",
+    connecting: "warning",
+    disconnected: "danger",
+    error: "danger",
+    disconnecting: "warning",
+  };
+  return statusMap[status] || "danger";
+};
+
+const getServerTagType = (tokenId) => {
+  const status = getConnectionStatus(tokenId);
+  // 连接成功时服务器标签使用绿色，其他状态保持红色
+  return status === "connected" ? "success" : "error";
+};
+
+const getServerTagColor = (tokenId) => {
+  const status = getConnectionStatus(tokenId);
+  // 连接成功时服务器标签使用绿色，其他状态保持红色
+  return status === "connected" ? "green" : "red";
+};
+
+const getTokenActions = (token) => {
+  const actions = [
+    {
+      label: "编辑",
+      key: "edit",
+      icon: () => h(NIcon, null, { default: () => h(Create) }),
+    },
+    {
+      label: "复制Token",
+      key: "copy",
+      icon: () => h(NIcon, null, { default: () => h(Copy) }),
+    },
+  ];
+
+  // 根据Token类型添加刷新选项
+  if (token.importMethod === "url" && token.sourceUrl) {
+    actions.push({
+      label: "从URL刷新",
+      key: "refresh-url",
+      icon: () => h(NIcon, null, { default: () => h(SyncCircle) }),
+    });
+  } else {
+    actions.push({
+      label: "重新获取",
+      key: "refresh",
+      icon: () => h(NIcon, null, { default: () => h(Refresh) }),
+    });
+  }
+
+  actions.push(
+    { type: "divider" },
+    {
+      label: "删除",
+      key: "delete",
+      icon: () => h(NIcon, null, { default: () => h(TrashBin) }),
+      props: { style: { color: "#e74c3c" } },
+    },
+  );
+
+  return actions;
+};
+
+const handleTokenAction = async (key, token) => {
+  switch (key) {
+    case "edit":
+      editToken(token);
+      break;
+    case "copy":
+      copyToken(token);
+      break;
+    case "refresh":
+      // 重新获取Token
+      refreshToken(token);
+      break;
+    case "refresh-url":
+      // URL获取的Token刷新
+      refreshToken(token);
+      break;
+    case "delete":
+      deleteToken(token);
+      break;
+  }
+};
+
+const editToken = (token) => {
+  editingToken.value = token;
+  Object.assign(editForm, {
+    name: token.name,
+    token: token.token,
+    server: token.server || "",
+    wsUrl: token.wsUrl || "",
+    remark: token.remark || "",
+  });
+  showEditModal.value = true;
+};
+
+const saveEdit = async () => {
+  if (!editFormRef.value || !editingToken.value) return;
+
+  try {
+    await editFormRef.value.validate();
+
+    tokenStore.updateToken(editingToken.value.id, {
+      name: editForm.name,
+      token: editForm.token,
+      server: editForm.server,
+      wsUrl: editForm.wsUrl,
+      remark: editForm.remark,
+    });
+
+    message.success("Token信息已更新");
+    showEditModal.value = false;
+    editingToken.value = null;
+  } catch (error) {
+    // 验证失败
+  }
+};
+
+const copyToken = async (token) => {
+  try {
+    await navigator.clipboard.writeText(token.token);
+    message.success("Token已复制到剪贴板");
+  } catch (error) {
+    message.error("复制失败");
+  }
+};
+
+// 快速编辑备注功能
+const startEditRemark = (token) => {
+  editingRemark.value = token.id;
+  tempRemarks.value[token.id] = token.remark || "";
+};
+
+// 保存备注的通用函数
+const saveCurrentRemark = () => {
+  if (!editingRemark.value) return;
+
+  const editingTokenId = editingRemark.value;
+  const remark = tempRemarks.value[editingTokenId] || "";
+  tokenStore.updateToken(editingTokenId, {
+    remark: remark,
+  });
+  editingRemark.value = null;
+  message.success("备注已保存");
+};
+
+const saveRemark = (token) => {
+  saveCurrentRemark();
+};
+
+const cancelEditRemark = () => {
+  editingRemark.value = null;
+};
+
+const deleteToken = (token) => {
+  dialog.warning({
+    title: "删除Token",
+    content: `确定要删除Token "${token.name}" 吗？此操作无法恢复。`,
+    positiveText: "确定删除",
+    negativeText: "取消",
+    onPositiveClick: async () => {
+      await tokenStore.removeToken(token.id);
+      message.success("Token已删除");
+    },
+  });
+};
+
+// 批量刷新所有URLToken
+const refreshAllTokens = async () => {
+  if (!tokenStore.gameTokens.length) {
+    message.warning("没有可刷新的Token");
+    return;
+  }
+
+  const tokensToRefresh = tokenStore.gameTokens.filter(
+    (token) =>
+      token.importMethod === "url" ||
+      token.importMethod === "wxQrcode" ||
+      token.importMethod === "bin",
+  );
+  const manualTokens = tokenStore.gameTokens.filter(
+    (token) => token.importMethod === "manual",
+  );
+
+  if (tokensToRefresh.length === 0) {
+    message.warning("没有支持自动刷新的Token");
+    return;
+  }
+
+  // 显示确认对话框
+  dialog.warning({
+    title: "批量刷新Token",
+    content: "确定要刷新所有支持自动刷新的Token吗?",
+    positiveText: "开始刷新",
+    negativeText: "取消",
+    onPositiveClick: async () => {
+      try {
+        let successCount = 0;
+        let failCount = 0;
+
+        // 显示进度提示
+        const loadingMessage = message.loading(
+          `正在批量刷新Token (0/${tokensToRefresh.length})`,
+          {
+            duration: 0,
+          },
+        );
+
+        for (let i = 0; i < tokensToRefresh.length; i++) {
+          const token = tokensToRefresh[i];
+
+          try {
+            // 更新进度显示
+            loadingMessage.content = `正在刷新Token (${i + 1}/${tokensToRefresh.length}): ${token.name}`;
+
+            // 调用单个刷新函数（限流器会自动处理等待）
+            await refreshToken(token);
+            successCount++;
+          } catch (error) {
+            console.error(`刷新Token "${token.name}" 失败:`, error);
+            failCount++;
+          }
+        }
+
+        // 关闭进度提示
+        loadingMessage.destroy();
+
+        // 关闭限流等待提示
+        rateLimitWaiting.value = false;
+
+        // 显示结果
+        if (failCount === 0) {
+          message.success(`批量刷新完成！成功刷新 ${successCount} 个Token`);
+        } else {
+          message.warning(
+            `批量刷新完成，成功 ${successCount} 个，失败 ${failCount} 个`,
+          );
+        }
+
+        // 如果有手动导入的Token，提示用户
+        if (manualTokens.length > 0) {
+          message.info(`${manualTokens.length} 个手动导入的Token需要手动刷新`);
+        }
+      } catch (error) {
+        message.error("批量刷新过程中发生错误: " + error.message);
+      }
+    },
+  });
+};
+
+const handleBulkAction = (key) => {
+  switch (key) {
+    case "refreshAll":
+      refreshAllTokens();
+      break;
+    case "updateInfo":
+      updateAllTokenInfo();
+      break;
+    case "export":
+      exportTokens();
+      break;
+    case "import":
+      importTokenFile();
+      break;
+    case "clean":
+      cleanExpiredTokens();
+      break;
+    case "disconnect":
+      disconnectAll();
+      break;
+    case "clear":
+      clearAllTokens();
+      break;
+  }
+};
+
+const exportTokens = () => {
+  try {
+    const data = tokenStore.exportTokens();
+    const dataStr = JSON.stringify(data, null, 2);
+    const dataBlob = new Blob([dataStr], { type: "application/json" });
+
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(dataBlob);
+    link.download = `tokens_backup_${new Date().toISOString().split("T")[0]}.json`;
+    link.click();
+
+    message.success("Token数据已导出");
+  } catch (error) {
+    message.error("导出失败");
+  }
+};
+
+const importTokenFile = () => {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".json";
+  input.onchange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = JSON.parse(e.target.result);
+          const result = tokenStore.importTokens(data);
+          if (result.success) {
+            message.success(result.message);
+          } else {
+            message.error(result.message);
+          }
+        } catch (error) {
+          message.error("文件格式错误");
+        }
+      };
+      reader.readAsText(file);
+    }
+  };
+  input.click();
+};
+
+const cleanExpiredTokens = async () => {
+  const count = await tokenStore.cleanExpiredTokens();
+  message.success(`已清理 ${count} 个过期Token`);
+};
+
+const disconnectAll = () => {
+  tokenStore.gameTokens.forEach((token) => {
+    tokenStore.closeWebSocketConnection(token.id);
+  });
+  message.success("所有连接已断开");
+};
+
+const clearAllTokens = () => {
+  dialog.error({
+    title: "清除所有Token",
+    content: "确定要清除所有Token吗？此操作无法恢复！",
+    positiveText: "确定清除",
+    negativeText: "取消",
+    onPositiveClick: async () => {
+      await tokenStore.clearAllTokens();
+      message.success("所有Token已清除");
+    },
+  });
+};
+
+// 一键连接更新所有token信息
+const updateAllTokenInfo = async () => {
+  if (tokenStore.gameTokens.length === 0) {
+    message.warning("没有可更新的Token");
+    return;
+  }
+
+  dialog.warning({
+    title: "更新所有Token信息",
+    content:
+      "此操作将逐个连接所有Token，获取最新的角色名称和服务器信息，完成后自动断开连接。\n\n预计耗时：约3-5秒/个Token",
+    positiveText: "开始更新",
+    negativeText: "取消",
+    onPositiveClick: async () => {
+      try {
+        let successCount = 0;
+        let failCount = 0;
+        const totalTokens = tokenStore.gameTokens.length;
+
+        // 显示进度提示
+        const loadingMessage = message.loading(
+          `正在更新Token信息 (0/${totalTokens})`,
+          {
+            duration: 0,
+          },
+        );
+
+        // 顺序处理每个token
+        for (let i = 0; i < tokenStore.gameTokens.length; i++) {
+          const token = tokenStore.gameTokens[i];
+
+          // 更新进度显示
+          loadingMessage.content = `正在更新Token信息 (${i + 1}/${totalTokens}): ${token.name}`;
+
+          try {
+            // 连接token获取角色信息
+            await tokenStore.selectToken(token.id);
+
+            // 等待1秒确保角色信息已获取（可根据实际情况调整）
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+
+            // 断开连接
+            tokenStore.closeWebSocketConnection(token.id);
+
+            successCount++;
+            message.success(`Token "${token.name}" 信息更新成功`);
+          } catch (error) {
+            console.error(`更新Token "${token.name}" 失败:`, error);
+            failCount++;
+            message.error(`Token "${token.name}" 信息更新失败`);
+          }
+
+          // 添加短暂延迟，避免服务器压力过大
+          if (i < tokenStore.gameTokens.length - 1) {
+            await new Promise((resolve) => setTimeout(resolve, 500));
+          }
+        }
+
+        // 关闭进度提示
+        loadingMessage.destroy();
+
+        // 显示结果
+        if (failCount === 0) {
+          message.success(
+            `所有Token信息更新完成！成功更新 ${successCount} 个Token`,
+          );
+        } else {
+          message.warning(
+            `Token信息更新完成，成功 ${successCount} 个，失败 ${failCount} 个`,
+          );
+        }
+      } catch (error) {
+        message.error("更新过程中发生错误: " + error.message);
+      }
+    },
+  });
+};
+
+const maskToken = (token) => {
+  if (!token) return "";
+  const len = token.length;
+  if (len <= 8) return token;
+  return token.substring(0, 4) + "***" + token.substring(len - 4);
+};
+
+const formatTime = (timestamp) => {
+  return new Date(timestamp).toLocaleString("zh-CN");
+};
+
+const goToBatchDailyTasks = () => {
+  router.push("/admin/batch-daily-tasks");
+};
+
+// 开始任务管理 - 直接跳转到游戏功能
+const startTaskManagement = (token) => {
+  // 选择token
+  tokenStore.selectToken(token.id);
+  // 直接跳转到游戏功能，不等待连接
+  message.success(`正在进入 ${token.name} 的游戏功能`);
+  router.push("/admin/game-features");
+};
+
+// URL参数处理函数
+const handleUrlParams = async () => {
+  // 检查是否通过URL传递了token参数
+  if (props.token || props.api) {
+    try {
+      isImporting.value = true;
+      let tokenResult = null;
+
+      if (props.api) {
+        // 通过API获取token
+        // 降噪
+        message.info("正在从API获取token...");
+
+        const response = await fetch(props.api, {
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+          },
+          mode: "cors",
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            `API请求失败: ${response.status} ${response.statusText}`,
+          );
+        }
+
+        const data = await response.json();
+
+        if (!data.token) {
+          throw new Error("API返回数据中未找到token字段");
+        }
+
+        // 使用API获取的token
+        tokenResult = tokenStore.importBase64Token(
+          props.name || data.name || "通过API导入的Token",
+          data.token,
+          {
+            server: props.server || data.server,
+            wsUrl: props.wsUrl,
+            sourceUrl: props.api,
+            importMethod: "url",
+          },
+        );
+      } else if (props.token) {
+        // 直接使用URL中的token
+        // 降噪
+        message.info("正在导入token...");
+
+        tokenResult = tokenStore.importBase64Token(
+          props.name || "通过URL导入的Token",
+          props.token,
+          {
+            server: props.server,
+            wsUrl: props.wsUrl,
+            importMethod: "url",
+          },
+        );
+      }
+
+      if (tokenResult && tokenResult.success) {
+        message.success(`Token "${tokenResult.tokenName}" 导入成功！`);
+
+        // 如果auto=true，自动选择并跳转到游戏功能
+        if (props.auto && tokenResult.token) {
+          tokenStore.selectToken(tokenResult.token.id);
+          message.success("正在跳转到游戏功能...");
+          setTimeout(() => {
+            router.push("/admin/game-features");
+          }, 1500);
+        } else {
+          // 清除URL参数，避免重复处理
+          router.replace(accountHomePath.value);
+        }
+      } else {
+        throw new Error(tokenResult?.message || "Token导入失败");
+      }
+    } catch (error) {
+      console.error("URL参数处理失败:", error);
+      message.error(`导入失败: ${error.message}`);
+      // 清除URL参数
+      router.replace(accountHomePath.value);
+    } finally {
+      isImporting.value = false;
+    }
+  }
+};
+
+// 监听路由参数变化
+watch(() => [props.token, props.api], handleUrlParams, { immediate: false });
+
+// 限流等待事件处理
+const handleRateLimitWaiting = (data) => {
+  rateLimitWaiting.value = true;
+  rateLimitMessage.value = `Token刷新限流等待中，预计等待 ${data.waitSeconds} 秒（队列: ${data.queueSize}）`;
+};
+
+// 生命周期
+onMounted(async () => {
+  tokenStore.initTokenStore();
+
+  // 监听限流等待事件
+  $emit.on("token:refresh:waiting", handleRateLimitWaiting);
+
+  // 处理URL参数
+  await handleUrlParams();
+
+  // 如果没有token且没有URL参数，显示导入表单
+  if (!inAppLayout.value && !tokenStore.hasTokens && !props.token && !props.api) {
+    showImportForm.value = true;
+  }
+});
+
+onUnmounted(() => {
+  // 移除限流等待事件监听
+  $emit.off("token:refresh:waiting", handleRateLimitWaiting);
+});
+</script>
+
+<style scoped lang="scss">
+.token-import-page {
+  --account-page-bg: #f3f5fb;
+  --account-page-bg-deep: #e9eef7;
+  --account-ink: #172033;
+  --account-muted: #667085;
+  --account-glass: rgba(255, 255, 255, 0.38);
+  --account-glass-strong: rgba(255, 255, 255, 0.5);
+  --account-glass-border: rgba(255, 255, 255, 0.66);
+  --account-line: rgba(129, 141, 170, 0.24);
+  --account-shadow: 0 24px 70px rgba(42, 54, 86, 0.14);
+  --account-shadow-soft: 0 14px 36px rgba(42, 54, 86, 0.1);
+  min-height: 100vh;
+  background:
+    linear-gradient(180deg, var(--account-page-bg) 0%, var(--account-page-bg-deep) 100%);
+  isolation: isolate;
+  overflow-x: hidden;
+  padding: 32px 0 48px;
+  position: relative;
+}
+
+.token-import-page.in-app-layout {
+  min-height: calc(100dvh - 66px);
+  background: transparent;
+  padding: clamp(20px, 3vw, 34px) 0 48px;
+}
+
+.token-import-page.in-app-layout::before,
+.token-import-page.in-app-layout::after {
+  display: none;
+}
+
+.token-import-page::before,
+.token-import-page::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.account-orb-background {
+  height: min(820px, 112vh);
+  left: 50%;
+  opacity: 0.78;
+  pointer-events: none;
+  position: absolute;
+  top: -210px;
+  transform: translateX(-50%);
+  width: min(1180px, 136vw);
+  z-index: 0;
+}
+
+.token-import-page::before {
+  width: min(760px, 72vw);
+  height: 300px;
+  top: 54px;
+  left: 5vw;
+  border-radius: 46px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.38)),
+    linear-gradient(100deg, rgba(80, 160, 255, 0.2), rgba(42, 193, 145, 0.1));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.86);
+  transform: rotate(-2deg);
+}
+
+.token-import-page::after {
+  width: min(520px, 54vw);
+  height: 240px;
+  top: 92px;
+  right: 8vw;
+  border-radius: 52px;
+  background:
+    linear-gradient(135deg, rgba(70, 143, 255, 0.2), rgba(255, 255, 255, 0.14)),
+    linear-gradient(45deg, rgba(255, 122, 169, 0.16), rgba(255, 255, 255, 0.32));
+  filter: saturate(1.1);
+  opacity: 0.86;
+}
+
+/* 深色主题下的页面背景 */
+:global([data-theme="dark"] .token-import-page) {
+  --account-page-bg: #111827;
+  --account-page-bg-deep: #0f172a;
+  --account-ink: #f8fafc;
+  --account-muted: #cbd5e1;
+  --account-glass: rgba(30, 41, 59, 0.34);
+  --account-glass-strong: rgba(30, 41, 59, 0.48);
+  --account-glass-border: rgba(255, 255, 255, 0.2);
+  --account-line: rgba(255, 255, 255, 0.16);
+  --account-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+  --account-shadow-soft: 0 14px 36px rgba(0, 0, 0, 0.24);
+  background:
+    linear-gradient(180deg, var(--account-page-bg) 0%, var(--account-page-bg-deep) 100%);
+}
+
+:global([data-theme="dark"] .token-import-page.in-app-layout) {
+  background: #05070b;
+}
+
+:global([data-theme="dark"] .token-import-page::before) {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.04)),
+    linear-gradient(100deg, rgba(59, 130, 246, 0.22), rgba(16, 185, 129, 0.12));
+}
+
+:global([data-theme="dark"] .token-import-page::after) {
+  background:
+    linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(255, 255, 255, 0.04)),
+    linear-gradient(45deg, rgba(244, 114, 182, 0.12), rgba(255, 255, 255, 0.04));
+}
+
+:global([data-theme="dark"] .account-orb-background) {
+  opacity: 0.68;
+}
+
+.container {
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 0 28px;
+  position: relative;
+  z-index: 1;
+}
+
+.page-header {
+  text-align: left;
+  margin-bottom: 24px;
+}
+
+.header-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--account-ink);
+}
+
+.header-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  position: relative;
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.theme-toggle {
+  position: absolute;
+  right: 0;
+  background: var(--account-glass-strong);
+  border: 1px solid var(--account-glass-border);
+  box-shadow: var(--account-shadow-soft);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+}
+
+.brand-logo {
+  width: 58px;
+  height: 58px;
+  border-radius: 18px;
+  border: 1px solid var(--account-glass-border);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    0 16px 34px rgba(42, 54, 86, 0.12);
+  object-fit: cover;
+}
+
+.header-content h1 {
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.08;
+  margin: 0;
+  color: var(--account-ink);
+  letter-spacing: 0;
+}
+
+.header-content p {
+  font-size: var(--font-size-lg);
+  margin: 0;
+  color: rgba(255, 255, 255, 0.95);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+.import-section {
+  margin-bottom: var(--spacing-2xl);
+}
+
+.import-card {
+  background: var(--bg-primary);
+  border-radius: var(--border-radius-xl);
+  padding: var(--spacing-2xl);
+  box-shadow: var(--shadow-large);
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.card-header {
+  text-align: center;
+  margin-bottom: var(--spacing-xl);
+
+  h2 {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    color: var(--text-primary);
+    font-size: var(--font-size-xl);
+    margin-bottom: var(--spacing-sm);
+  }
+
+  p {
+    color: var(--text-secondary);
+    margin: 0 0 var(--spacing-md) 0;
+  }
+
+  .subtitle {
+    font-size: var(--font-size-md);
+    color: var(--text-tertiary);
+    margin: 0;
+    font-weight: var(--font-weight-normal);
+  }
+
+  .import-method-tabs {
+    margin-top: var(--spacing-md);
+    display: flex;
+    justify-content: center;
+  }
+}
+
+.form-tips {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.form-tip {
+  color: var(--text-tertiary);
+  font-size: var(--font-size-sm);
+}
+
+.cors-tip {
+  color: var(--warning-color);
+  font-weight: var(--font-weight-medium);
+}
+
+.connection-actions {
+  display: flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+}
+
+/* 深色主题强制覆盖（与全局 data-theme 保持一致） */
+:global([data-theme="dark"] .n-form-item-label),
+:global([data-theme="dark"] .n-form-item-label__text) {
+  color: #ffffff !important;
+}
+
+:global([data-theme="dark"] .n-input__input),
+:global([data-theme="dark"] .n-input__textarea) {
+  color: #ffffff !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+:global([data-theme="dark"] .n-input__placeholder) {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+:global([data-theme="dark"] .n-card) {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+}
+
+:global([data-theme="dark"] .import-card) {
+  background: rgba(45, 55, 72, 0.9) !important;
+  color: #ffffff !important;
+}
+
+:global([data-theme="dark"] .import-card h2) {
+  color: #ffffff !important;
+}
+
+:global([data-theme="dark"] .import-card .subtitle) {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+:global([data-theme="dark"] .n-collapse-item__header) {
+  color: #ffffff !important;
+}
+
+:global([data-theme="dark"] .n-collapse-item__content-wrapper) {
+  background-color: transparent !important;
+}
+
+:global([data-theme="dark"] .n-radio-button) {
+  color: #ffffff !important;
+}
+
+:global([data-theme="dark"] .n-radio-button--checked) {
+  background-color: rgba(16, 185, 129, 0.8) !important;
+  color: #ffffff !important;
+}
+
+:global([data-theme="dark"] .form-tip) {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+.optional-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-md);
+}
+
+.form-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-xl);
+}
+
+.tokens-section {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.14)),
+    var(--account-glass);
+  border: 1px solid var(--account-glass-border);
+  border-radius: 28px;
+  padding: 22px;
+  box-shadow: var(--account-shadow);
+  backdrop-filter: blur(34px) saturate(185%);
+  -webkit-backdrop-filter: blur(34px) saturate(185%);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 150px);
+  overflow: hidden;
+}
+
+/* 深色主题下的列表区域背景 */
+:global([data-theme="dark"] .tokens-section) {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04)),
+    var(--account-glass);
+  color: var(--account-ink);
+  border-color: var(--account-glass-border);
+}
+
+/* 深色主题下的固定头部 */
+.account-empty-state {
+  width: min(520px, calc(100% - 32px));
+  margin: clamp(28px, 6vw, 72px) auto 0;
+  padding: 34px 28px;
+  box-sizing: border-box;
+  border: 1px solid var(--app-line);
+  border-radius: 18px;
+  background: var(--app-surface);
+  box-shadow: 0 6px 8px rgba(42, 54, 86, 0.08);
+  color: var(--text-primary);
+  text-align: center;
+}
+
+.account-empty-state :deep(.arco-empty-image) {
+  margin-bottom: 14px;
+  color: var(--primary-color);
+  opacity: 0.92;
+}
+
+.account-empty-state :deep(.arco-empty-description),
+.account-empty-state :deep(.arco-empty) {
+  color: var(--text-primary);
+}
+
+.account-empty-state :deep(.arco-btn) {
+  margin-top: 16px;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+:global([data-theme="dark"] .section-header) {
+  background: rgba(30, 41, 59, 0.38);
+  border-bottom-color: var(--account-line);
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: rgba(255, 255, 255, 0.34);
+  margin: -22px -22px 18px;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--account-line);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+
+  h2 {
+    color: var(--account-ink);
+    font-size: 18px;
+    font-weight: 800;
+    line-height: var(--line-height-tight);
+    margin: 0;
+  }
+}
+
+.header-actions {
+  display: flex;
+  flex: 0 1 auto;
+  gap: 10px;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.header-actions :deep(.n-button) {
+  border-radius: 999px;
+  min-height: 34px;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease;
+}
+
+.header-actions :deep(.n-button:not(.n-button--primary-type):not(.n-button--success-type)) {
+  background: rgba(255, 255, 255, 0.62);
+  border-color: rgba(129, 141, 170, 0.24);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.header-actions :deep(.n-button:hover) {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(42, 54, 86, 0.12);
+}
+
+.header-actions :deep(.n-button:active) {
+  transform: translateY(0);
+}
+
+.tokens-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 18px;
+  overflow-y: auto;
+  padding: 2px 6px 4px 2px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(129, 141, 170, 0.34) rgba(255, 255, 255, 0.36);
+  flex: 1;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.36);
+    border-radius: 3px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(129, 141, 170, 0.38);
+    border-radius: 3px;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: rgba(102, 112, 133, 0.52);
+  }
+}
+
+.token-card {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.16));
+  border: 1px solid var(--account-glass-border);
+  border-radius: 22px;
+  box-shadow: var(--account-shadow-soft);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  padding: 0;
+  cursor: pointer;
+  min-width: 0;
+  overflow: hidden;
+  width: 100%;
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    transform var(--transition-fast);
+
+  :deep(.arco-card-header) {
+    align-items: flex-start;
+    border-bottom: 1px solid var(--account-line);
+    display: grid;
+    gap: 10px;
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+    min-height: 46px;
+    overflow: visible;
+    padding: 18px;
+  }
+
+  :deep(.arco-card-header-title) {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: visible;
+    white-space: normal;
+  }
+
+  :deep(.arco-card-header-extra) {
+    display: flex;
+    flex-shrink: 0;
+    justify-content: flex-end;
+    min-height: 32px;
+    min-width: 0;
+    overflow: visible;
+    width: 100%;
+  }
+
+  :deep(.arco-card-body) {
+    padding: 16px 18px 18px;
+  }
+
+  :deep(.arco-card-actions) {
+    background: transparent;
+    border-top: 1px solid var(--account-line);
+    padding: 12px 18px 18px;
+  }
+
+  :deep(.arco-card-actions-right) {
+    display: flex;
+    justify-content: flex-end;
+    width: 100%;
+  }
+
+  :deep(.arco-card-actions-item) {
+    background: transparent;
+    border: 0;
+    padding: 0;
+  }
+
+  :deep(.arco-card-actions .n-button) {
+    border-radius: 999px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24);
+    font-weight: 800;
+    min-height: 42px;
+    overflow: hidden;
+    width: auto;
+    transition:
+      transform 170ms ease,
+      box-shadow 170ms ease;
+  }
+
+  :deep(.arco-card-actions .n-button:hover) {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+    transform: translateY(-1px);
+  }
+
+  :deep(.arco-card-actions .n-button:active) {
+    transform: translateY(0);
+  }
+
+  &:hover {
+    border-color: rgba(16, 185, 129, 0.42);
+    box-shadow: 0 22px 46px rgba(42, 54, 86, 0.16);
+    transform: translateY(-2px);
+  }
+
+  &.active {
+    border-color: rgba(16, 185, 129, 0.54);
+    box-shadow:
+      0 0 0 4px rgba(16, 185, 129, 0.12),
+      var(--account-shadow-soft);
+  }
+
+  &.connected {
+    border-color: rgba(24, 160, 88, 0.45);
+  }
+}
+
+.tokens-list {
+  overflow-y: auto;
+  padding-right: var(--spacing-sm);
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-medium) var(--bg-tertiary);
+  flex: 1;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: var(--bg-tertiary);
+    border-radius: 3px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--border-medium);
+    border-radius: 3px;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: var(--border-dark);
+  }
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--spacing-md);
+}
+
+.token-info {
+  flex: 1;
+}
+
+.token-name {
+  align-items: center;
+  display: flex;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--account-ink);
+  line-height: var(--line-height-normal);
+  margin: 0;
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
+  row-gap: var(--spacing-xs);
+  width: 100%;
+
+  :deep(.arco-space-item) {
+    align-items: center;
+    display: flex;
+    min-width: 0;
+  }
+
+  :deep(.arco-space-item:has(.token-title-text)) {
+    flex: 1 1 9rem;
+    max-width: 100%;
+  }
+
+  :deep(.n-avatar) {
+    border: 1px solid rgba(255, 255, 255, 0.78);
+    box-shadow: 0 10px 22px rgba(42, 54, 86, 0.14);
+  }
+
+  :deep(.arco-tag) {
+    border: 0;
+    border-radius: 999px;
+    font-weight: 700;
+    line-height: 1.6;
+  }
+
+  :deep(.arco-badge-status-wrapper) {
+    align-items: center;
+    display: inline-flex;
+    gap: 6px;
+  }
+
+  :deep(.arco-badge-status-text) {
+    color: var(--account-ink);
+    font-size: 13px;
+    font-weight: 700;
+  }
+}
+
+.token-title-text {
+  display: block;
+  line-height: var(--line-height-normal);
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.token-card-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end !important;
+  max-width: 180px;
+  min-height: 32px;
+
+  :deep(.n-button) {
+    background: rgba(255, 255, 255, 0.72);
+    border-color: rgba(129, 141, 170, 0.24);
+    border-radius: 999px;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.78),
+      0 8px 18px rgba(42, 54, 86, 0.08);
+    min-height: 32px;
+    transition:
+      transform 160ms ease,
+      box-shadow 160ms ease,
+      border-color 160ms ease;
+  }
+
+  :deep(.n-button:hover) {
+    border-color: rgba(16, 185, 129, 0.34);
+    transform: translateY(-1px);
+  }
+
+  :deep(.n-button:active) {
+    transform: translateY(0);
+  }
+}
+
+.token-meta {
+  display: flex;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+}
+
+.meta-item {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--border-radius-small);
+}
+
+.card-body {
+  margin-bottom: var(--spacing-md);
+}
+
+.token-display {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+  padding: var(--spacing-sm);
+  background: var(--bg-tertiary);
+  border-radius: var(--border-radius-medium);
+}
+
+.token-label {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.token-value {
+  font-family: monospace;
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.connection-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-md);
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+
+  &.connected {
+    background: var(--success-color);
+  }
+
+  &.connecting {
+    background: var(--warning-color);
+  }
+
+  &.error {
+    background: var(--error-color);
+  }
+}
+
+.status-text {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.token-remark {
+  margin: var(--spacing-sm) 0;
+  padding: var(--spacing-sm);
+  background: var(--bg-tertiary);
+  border-radius: var(--border-radius-small);
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-xs);
+
+  &:hover {
+    background: var(--bg-secondary);
+  }
+}
+
+.token-remark-edit {
+  cursor: default;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-medium);
+
+  &:hover {
+    background: var(--bg-primary);
+  }
+}
+
+.remark-label {
+  font-weight: var(--font-weight-medium);
+  margin-right: var(--spacing-xs);
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.remark-value {
+  font-style: italic;
+  flex: 1;
+}
+
+.token-timestamps {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+}
+
+.timestamp-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.timestamp-label {
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+}
+
+.timestamp-value {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+.card-footer {
+  border-top: 1px solid var(--border-light);
+  padding-top: var(--spacing-md);
+}
+
+/* 连接状态指示器样式 */
+.connection-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-left: var(--spacing-xs);
+  position: relative;
+
+  &.connected {
+    background-color: #10b981;
+    /* 绿色 - 已连接 */
+    animation: pulse-green 2s infinite;
+  }
+
+  &.connecting {
+    background-color: #f59e0b;
+    /* 黄色 - 连接中 */
+    animation: pulse-yellow 1s infinite;
+  }
+
+  &.disconnected {
+    background-color: #6b7280;
+    /* 灰色 - 已断开 */
+  }
+
+  &.error {
+    background-color: #ef4444;
+    /* 红色 - 连接错误 */
+    animation: pulse-red 1s infinite;
+  }
+}
+
+.connection-status {
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 4px;
+
+  &.connected {
+    color: #10b981;
+    background-color: rgba(16, 185, 129, 0.1);
+  }
+
+  &.connecting {
+    color: #f59e0b;
+    background-color: rgba(245, 158, 11, 0.1);
+  }
+
+  &.disconnected {
+    color: #6b7280;
+    background-color: rgba(107, 114, 128, 0.1);
+  }
+
+  &.error {
+    color: #ef4444;
+    background-color: rgba(239, 68, 68, 0.1);
+  }
+}
+
+@keyframes pulse-green {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes pulse-yellow {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@keyframes pulse-red {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.empty-state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+  background: var(--account-glass);
+  border: 1px solid var(--account-glass-border);
+  border-radius: 28px;
+  box-shadow: var(--account-shadow);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+}
+
+.modal-actions {
+  display: flex;
+  gap: var(--spacing-md);
+  justify-content: flex-end;
+}
+
+@media (max-width: 768px) {
+  .token-import-page {
+    padding: 18px 0 30px;
+  }
+
+  .token-import-page::before {
+    width: 86vw;
+    height: 190px;
+    top: 18px;
+    left: -18vw;
+    border-radius: 34px;
+  }
+
+  .token-import-page::after {
+    width: 70vw;
+    height: 170px;
+    top: 58px;
+    right: -26vw;
+    border-radius: 38px;
+  }
+
+  .account-orb-background {
+    height: 560px;
+    top: -150px;
+    width: 150vw;
+  }
+
+  .container {
+    padding: 0 10px;
+  }
+
+  .page-header {
+    margin-bottom: 18px;
+  }
+
+  .account-empty-state {
+    width: 100%;
+    margin: 24px 0 0;
+    padding: 26px 18px;
+  }
+
+  .account-empty-state :deep(.arco-empty-description) {
+    display: grid;
+    justify-items: center;
+    gap: 12px;
+  }
+
+  .brand-logo {
+    width: 54px;
+    height: 54px;
+    border-radius: 16px;
+  }
+
+  .header-content h1 {
+    font-size: 26px;
+  }
+
+  .tokens-section {
+    border-radius: 24px;
+    max-height: none;
+    padding: 16px;
+  }
+
+  .tokens-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    padding: 1px;
+  }
+
+  .optional-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .section-header {
+    flex-direction: column;
+    gap: 14px;
+    align-items: stretch;
+    margin: -16px -16px 16px;
+    padding: 16px;
+  }
+
+  .header-actions {
+    justify-content: flex-start;
+  }
+
+  .header-actions :deep(.n-button) {
+    flex: 1 1 auto;
+  }
+
+  .token-card {
+    border-radius: 20px;
+
+    :deep(.arco-card-header) {
+      align-items: stretch;
+      grid-template-columns: minmax(0, 1fr);
+      padding: 16px;
+    }
+
+    :deep(.arco-card-header-title) {
+      width: 100%;
+    }
+
+    :deep(.arco-card-header-extra) {
+      display: flex;
+      justify-content: flex-end;
+      margin-left: 0;
+      min-width: 0;
+      overflow: visible;
+      width: 100%;
+    }
+  }
+
+  .token-card :deep(.arco-card-body) {
+    padding: 14px 16px 16px;
+  }
+
+  .token-card :deep(.arco-card-actions) {
+    padding: 12px 16px 16px;
+  }
+
+  .token-card-actions {
+    justify-content: flex-end !important;
+    max-width: none;
+    width: 100%;
+  }
+
+  .token-title-text {
+    max-width: 100%;
+  }
+
+  .token-timestamps {
+    flex-direction: column;
+  }
+
+  .storage-info {
+    padding: var(--spacing-sm);
+  }
+
+  .storage-item {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+  }
+}
+
+/* 存储信息样式 */
+.storage-info {
+  margin-top: 0;
+  padding: 12px 16px;
+  border: 1px solid rgba(129, 141, 170, 0.18);
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(245, 248, 252, 0.7));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78);
+}
+
+.storage-info :deep(.n-tag) {
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.storage-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  margin-bottom: 0;
+}
+
+.storage-label {
+  font-size: var(--font-size-sm);
+  color: var(--account-muted);
+  font-weight: 700;
+  min-width: 70px;
+}
+
+.storage-upgrade {
+  margin-top: var(--spacing-xs);
+}
+
+:global([data-theme="dark"] .token-import-modal .arco-modal) {
+  background: var(--bg-primary) !important;
+}
+
+:global([data-theme="dark"] .token-card) {
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04)),
+    var(--account-glass);
+  border-color: var(--account-glass-border);
+}
+
+:global([data-theme="dark"] .storage-info) {
+  background:
+    linear-gradient(135deg, rgba(51, 65, 85, 0.74), rgba(30, 41, 59, 0.72));
+  border-color: var(--account-line);
+}
+
+:global([data-theme="dark"] .token-card-actions) :deep(.n-button),
+:global([data-theme="dark"] .header-actions) :deep(.n-button:not(.n-button--primary-type):not(.n-button--success-type)) {
+  background: rgba(30, 41, 59, 0.76);
+  border-color: var(--account-line);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .token-card {
+    transition: none;
+
+    &:hover {
+      transform: none;
+    }
+  }
+}
+</style>

@@ -1,0 +1,167 @@
+// 颜色变量
+:root {
+  --primary-color: #0ea5e9;
+  --primary-color-hover: #0284c7;
+  --primary-color-pressed: #0369a1;
+  --primary-color-light: rgba(14, 165, 233, 0.12);
+  --primary-color-rgb: 14, 165, 233;
+  --secondary-color: #14b8a6;
+
+  --success-color: #10b981;
+  --warning-color: #f59e0b;
+  --error-color: #ef4444;
+  --info-color: #38bdf8;
+
+  --text-primary: #132033;
+  --text-secondary: #526174;
+  --text-tertiary: #7a8798;
+  --text-disabled: #aab4c2;
+
+  --bg-primary: #ffffff;
+  --bg-secondary: #edf4fb;
+  --bg-tertiary: #e4edf7;
+  --bg-overlay: rgba(9, 20, 33, 0.52);
+  --bg-color: #edf4fb;
+
+  --card-bg: rgba(255, 255, 255, 0.48);
+  --input-bg: rgba(255, 255, 255, 0.5);
+  --input-border: rgba(99, 116, 139, 0.22);
+  --table-header-bg: rgba(241, 247, 253, 0.9);
+
+  --border-light: #dbe7f3;
+  --border-medium: #c5d4e5;
+  --border-dark: #91a4ba;
+  --border-color: rgba(99, 116, 139, 0.2);
+
+  --shadow-light: 0 14px 34px rgba(32, 50, 78, 0.08);
+  --shadow-medium: 0 22px 56px rgba(32, 50, 78, 0.11);
+  --shadow-heavy: 0 32px 88px rgba(32, 50, 78, 0.15);
+  --shadow-small: var(--shadow-light);
+
+  --border-radius-xs: 6px;
+  --border-radius-small: 8px;
+  --border-radius-sm: var(--border-radius-small);
+  --border-radius-medium: 10px;
+  --border-radius-large: 14px;
+  --border-radius-xl: 16px;
+  --border-radius-full: 999px;
+  --radius-lg: var(--border-radius-large);
+
+  --app-background:
+    radial-gradient(circle at 16% 0%, rgba(14, 165, 233, 0.16), transparent 31%),
+    radial-gradient(circle at 86% 12%, rgba(20, 184, 166, 0.13), transparent 28%),
+    linear-gradient(180deg, #f7fbff 0%, #e7f0fa 100%);
+  --app-surface: rgba(255, 255, 255, 0.4);
+  --app-surface-strong: rgba(255, 255, 255, 0.62);
+  --app-surface-muted: rgba(241, 247, 253, 0.46);
+  --app-glass-border: rgba(255, 255, 255, 0.72);
+  --app-line: rgba(99, 116, 139, 0.18);
+  --app-ring: rgba(14, 165, 233, 0.24);
+
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+
+  --font-size-xs: 12px;
+  --font-size-sm: 14px;
+  --font-size-md: 16px;
+  --font-size-lg: 18px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 24px;
+  --font-size-3xl: 32px;
+
+  --font-weight-light: 300;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --line-height-tight: 1.2;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.3s ease;
+  --transition-slow: 0.5s ease;
+
+  --z-dropdown: 1000;
+  --z-sticky: 1020;
+  --z-fixed: 1030;
+  --z-modal-backdrop: 1040;
+  --z-modal: 1050;
+  --z-popover: 1060;
+  --z-tooltip: 1070;
+  --z-toast: 1080;
+}
+
+[data-theme="dark"] {
+  --primary-color: #38bdf8;
+  --primary-color-hover: #7dd3fc;
+  --primary-color-pressed: #0ea5e9;
+  --primary-color-light: rgba(56, 189, 248, 0.16);
+  --primary-color-rgb: 56, 189, 248;
+  --secondary-color: #2dd4bf;
+
+  --text-primary: #f8fbff;
+  --text-secondary: #c5d2e3;
+  --text-tertiary: #91a1b5;
+  --text-disabled: #637086;
+
+  --bg-primary: #05070b;
+  --bg-secondary: #070b12;
+  --bg-tertiary: #1e293b;
+  --bg-overlay: rgba(0, 0, 0, 0.72);
+  --bg-color: #05070b;
+
+  --card-bg: rgba(17, 24, 39, 0.88);
+  --input-bg: rgba(17, 24, 39, 0.9);
+  --input-border: rgba(148, 163, 184, 0.26);
+  --table-header-bg: rgba(31, 41, 55, 0.92);
+
+  --border-light: rgba(148, 163, 184, 0.2);
+  --border-medium: rgba(148, 163, 184, 0.28);
+  --border-dark: rgba(148, 163, 184, 0.36);
+  --border-color: rgba(148, 163, 184, 0.24);
+
+  --shadow-light: 0 12px 34px rgba(0, 0, 0, 0.24);
+  --shadow-medium: 0 20px 56px rgba(0, 0, 0, 0.3);
+  --shadow-heavy: 0 30px 90px rgba(0, 0, 0, 0.38);
+  --shadow-small: var(--shadow-light);
+
+  --app-background: #05070b;
+  --app-surface: rgba(17, 24, 39, 0.86);
+  --app-surface-strong: rgba(31, 41, 55, 0.94);
+  --app-surface-muted: rgba(31, 41, 55, 0.76);
+  --app-glass-border: rgba(148, 163, 184, 0.3);
+  --app-line: rgba(148, 163, 184, 0.26);
+  --app-ring: rgba(56, 189, 248, 0.34);
+}
+
+@media (max-width: 768px) {
+  :root {
+    --font-size-xs: 12px;
+    --font-size-sm: 13px;
+    --font-size-md: 15px;
+    --font-size-lg: 16px;
+    --font-size-xl: 18px;
+    --font-size-2xl: 22px;
+    --font-size-3xl: 28px;
+
+    --spacing-xs: 4px;
+    --spacing-sm: 8px;
+    --spacing-md: 12px;
+    --spacing-lg: 16px;
+    --spacing-xl: 24px;
+    --spacing-2xl: 32px;
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    --font-size-md: 14px;
+    --spacing-md: 10px;
+  }
+}
