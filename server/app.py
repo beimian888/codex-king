@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import Optional
 
 from flask import Flask, jsonify, request, session
 from flask_cors import CORS
@@ -7,7 +8,7 @@ from flask_cors import CORS
 from server.system_database import SystemDatabase
 
 
-def create_app(db_path: str | None = None, *, init_schema: bool = True) -> Flask:
+def create_app(db_path: Optional[str] = None, *, init_schema: bool = True) -> Flask:
     SystemDatabase.load_env_file()
 
     app = Flask(__name__)

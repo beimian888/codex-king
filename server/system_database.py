@@ -5,6 +5,7 @@ import os
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Optional
 
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -31,7 +32,7 @@ def _response(success, message, **data):
 
 
 class SystemDatabase:
-    def __init__(self, db_path: str | None = None, *, engine: str = "sqlite", config: dict | None = None):
+    def __init__(self, db_path: Optional[str] = None, *, engine: str = "sqlite", config: Optional[dict] = None):
         self.db_path = db_path
         self.engine = engine
         self.config = config or {}
