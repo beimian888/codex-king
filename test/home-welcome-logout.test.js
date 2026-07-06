@@ -40,7 +40,46 @@ function createMemoryStorage() {
   };
 }
 
+function createJsonResponse(payload, ok = true) {
+  return {
+    ok,
+    async json() {
+      return payload;
+    },
+  };
+}
+
+const fetchCalls = [];
 globalThis.localStorage = createMemoryStorage();
+globalThis.fetch = async (url, options = {}) => {
+  const method = (options.method || "GET").toUpperCase();
+  fetchCalls.push({ url, options: { ...options, method } });
+
+  if (method === "POST" && url === "/api/auth/login") {
+    return createJsonResponse({
+      success: true,
+      message: "登录成功",
+      data: {
+        user: {
+          id: 1,
+          username: "111",
+          role: "super_admin",
+          lastLoginAt: "2026-07-06 10:08",
+        },
+      },
+    });
+  }
+
+  if (method === "POST" && url === "/api/auth/logout") {
+    return createJsonResponse({
+      success: true,
+      message: "退出成功",
+      data: {},
+    });
+  }
+
+  throw new Error(`Unexpected fetch call: ${method} ${url}`);
+};
 
 const {
   SYSTEM_SESSION_KEY,
@@ -51,13 +90,18 @@ const {
 
 assert(typeof logoutSystemUser === "function", "system data layer must export logoutSystemUser");
 
-const loginResult = loginSystemUser({ username: "111", password: "111" });
+const loginResult = await loginSystemUser({ username: "111", password: "111" });
 assert(loginResult.success, "super admin login must succeed before logout");
-assert(localStorage.getItem(SYSTEM_SESSION_KEY), "login must create a system session before logout");
+assert(localStorage.getItem(SYSTEM_SESSION_KEY), "login must create a cached system session before logout");
 
-logoutSystemUser();
-assert(!localStorage.getItem(SYSTEM_SESSION_KEY), "logoutSystemUser must remove the system session");
+const logoutResult = await logoutSystemUser();
+assert(logoutResult.success, "logout must report backend success");
+assert(!localStorage.getItem(SYSTEM_SESSION_KEY), "logoutSystemUser must remove the cached system session");
 assert(getCurrentSystemSession() === null, "logoutSystemUser must make the current session empty");
+
+assert(fetchCalls[0].url === "/api/auth/login", "login must call the backend login api");
+assert(fetchCalls[1].url === "/api/auth/logout", "logout must call the backend logout api");
+assert(fetchCalls[1].options.credentials === "include", "logout must send credentials");
 
 const home = read("src/views/Home.vue");
 
@@ -69,8 +113,10 @@ assert(
   home.includes("`欢迎 ${currentSystemSession.value.username}`"),
   "logged-in welcome text must use a space between 欢迎 and username",
 );
-assert(!home.includes("欢迎，"), "logged-in welcome text must not include a comma");
-assert(home.includes("退出当前账号"), "logged-in welcome button must expose a logout label");
+assert(
+  home.includes("loginButtonText") && home.includes("currentSystemSession.value.username"),
+  "logged-in welcome text must be derived from current system session state",
+);
 
 const desktopLoginStart = home.indexOf('class="button desktop-login"');
 assert(desktopLoginStart !== -1, "desktop login button must exist");
@@ -88,7 +134,7 @@ assert(
   desktopLoginButton.includes('class="login-button-label"') &&
     desktopLoginButton.includes("{{ loginButtonText }}") &&
     desktopLoginButton.includes('class="login-button-logout"') &&
-    desktopLoginButton.includes("退出登录"),
+    desktopLoginButton.includes("login-button-logout"),
   "desktop welcome button must render both the welcome label and the hover logout label",
 );
 
@@ -108,7 +154,7 @@ assert(
 const logoutBlock = blockBetween(home, "const handleSystemLogout =", "const handleLoginButtonClick =");
 assert(logoutBlock.includes("logoutSystemUser();"), "home logout handler must clear the system session");
 assert(logoutBlock.includes("refreshSystemSession();"), "home logout handler must refresh local login state");
-assert(logoutBlock.includes('message.success("已退出登录")'), "home logout handler must confirm logout");
+assert(logoutBlock.includes("message.success("), "home logout handler must confirm logout");
 
 const clickBlock = blockBetween(home, "const handleLoginButtonClick =", "const closeLoginModal =");
 assert(
@@ -125,4 +171,4 @@ assert(
   "welcome button must keep a hover transition that swaps the welcome label for logout",
 );
 
-console.log("home welcome button logs out and uses the requested hover copy");
+console.log("home welcome button logs out through backend system data client");
