@@ -20,6 +20,10 @@ def _now_text():
     return datetime.now().strftime("%Y-%m-%d %H:%M")
 
 
+def _parse_dt(value):
+    return datetime.strptime(value, "%Y-%m-%d %H:%M")
+
+
 def _response(success, message, **data):
     return {"success": success, "message": message, "data": data}
 
@@ -47,12 +51,16 @@ class SystemDatabase:
                     username TEXT NOT NULL UNIQUE,
                     password_hash TEXT NOT NULL,
                     role TEXT NOT NULL,
+                    card_key TEXT,
+                    level TEXT,
+                    expires_at TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
                     last_login_at TEXT
                 )
                 """
             )
+            self._ensure_user_columns(conn)
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS license_cards (
@@ -246,10 +254,23 @@ class SystemDatabase:
             )
             cursor = conn.execute(
                 """
-                INSERT INTO users (username, password_hash, role, created_at, updated_at, last_login_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO users (
+                    username, password_hash, role, card_key, level, expires_at,
+                    created_at, updated_at, last_login_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (username, generate_password_hash(password), ROLE_USER, now_text, now_text, None),
+                (
+                    username,
+                    generate_password_hash(password),
+                    ROLE_USER,
+                    card_key,
+                    card["level"],
+                    expires_at,
+                    now_text,
+                    now_text,
+                    None,
+                ),
             )
             conn.execute(
                 """
@@ -303,14 +324,20 @@ class SystemDatabase:
 
             remark = payload.get("remark", card["remark"])
             now = _now_text()
+            next_expires_at = card["expires_at"]
+            if card["status"] == "used" and level != card["level"]:
+                next_expires_at = self._calculate_expires_at(card["used_at"], level)
             conn.execute(
                 """
                 UPDATE license_cards
-                SET level = ?, remark = ?, updated_at = ?
+                SET level = ?, remark = ?, expires_at = ?, updated_at = ?
                 WHERE card_key = ?
                 """,
-                (level, remark, now, card_key),
+                (level, remark, next_expires_at, now, card_key),
             )
+            self._rebalance_admin_quota_usage(conn, card, level)
+            if card["status"] == "used":
+                self._sync_used_card_user(conn, card["user"], card["card_key"], level, next_expires_at, now)
             updated = conn.execute(
                 "SELECT * FROM license_cards WHERE card_key = ?", (card_key,)
             ).fetchone()
@@ -326,6 +353,7 @@ class SystemDatabase:
             ).fetchone()
             if not card:
                 return _response(False, "卡密不存在")
+            self._adjust_admin_quota_used(conn, card["created_by"], card["level"], -1)
             conn.execute("DELETE FROM license_cards WHERE card_key = ?", (card_key,))
             return _response(True, "卡密删除成功", card=self._serialize_card(card))
 
@@ -358,6 +386,9 @@ class SystemDatabase:
             "id": row["id"],
             "username": row["username"],
             "role": row["role"],
+            "cardKey": row["card_key"] if "card_key" in row.keys() else None,
+            "level": row["level"] if "level" in row.keys() else None,
+            "expiresAt": row["expires_at"] if "expires_at" in row.keys() else None,
             "createdAt": row["created_at"],
             "updatedAt": row["updated_at"],
             "lastLoginAt": row["last_login_at"],
@@ -401,3 +432,63 @@ class SystemDatabase:
             ).fetchone()
             if not existing:
                 return card_key
+
+    def _ensure_user_columns(self, conn):
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+        if "card_key" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN card_key TEXT")
+        if "level" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN level TEXT")
+        if "expires_at" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN expires_at TEXT")
+
+    def _calculate_expires_at(self, used_at, level):
+        return (_parse_dt(used_at) + timedelta(days=LICENSE_DURATION_DAYS[level])).strftime(
+            "%Y-%m-%d %H:%M"
+        )
+
+    def _rebalance_admin_quota_usage(self, conn, card, next_level):
+        if card["level"] == next_level:
+            return
+        self._adjust_admin_quota_used(conn, card["created_by"], card["level"], -1)
+        self._adjust_admin_quota_used(conn, card["created_by"], next_level, 1)
+
+    def _adjust_admin_quota_used(self, conn, username, level, delta):
+        admin = conn.execute(
+            "SELECT id FROM users WHERE username = ? AND role = ?",
+            (username, ROLE_ADMIN),
+        ).fetchone()
+        if not admin:
+            return
+
+        quota = conn.execute(
+            """
+            SELECT used
+            FROM admin_card_quotas
+            WHERE admin_user_id = ? AND level = ?
+            """,
+            (admin["id"], level),
+        ).fetchone()
+        if not quota:
+            return
+
+        conn.execute(
+            """
+            UPDATE admin_card_quotas
+            SET used = ?
+            WHERE admin_user_id = ? AND level = ?
+            """,
+            (max(quota["used"] + delta, 0), admin["id"], level),
+        )
+
+    def _sync_used_card_user(self, conn, username, card_key, level, expires_at, updated_at):
+        if not username:
+            return
+        conn.execute(
+            """
+            UPDATE users
+            SET card_key = ?, level = ?, expires_at = ?, updated_at = ?
+            WHERE username = ? AND role = ?
+            """,
+            (card_key, level, expires_at, updated_at, username, ROLE_USER),
+        )
