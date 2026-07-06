@@ -126,6 +126,18 @@ class SystemDatabase:
             refreshed = conn.execute("SELECT * FROM users WHERE id = ?", (row["id"],)).fetchone()
             return _response(True, "登录成功", user=self._serialize_user(conn, refreshed))
 
+    def get_user_session_state(self, username: str) -> dict:
+        if not username:
+            return _response(False, "璇峰厛鐧诲綍")
+
+        with self._connect() as conn:
+            row = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+            if not row:
+                return _response(False, "鐧诲綍宸插け鏁?")
+            if row["role"] not in {ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_USER}:
+                return _response(False, "鐢ㄦ埛韬唤鏃犳晥")
+            return _response(True, "鏌ヨ鎴愬姛", user=self._serialize_user(conn, row))
+
     def create_admin(self, actor: dict, payload: dict) -> dict:
         if actor.get("role") != ROLE_SUPER_ADMIN:
             return _response(False, "无权限")
@@ -177,6 +189,8 @@ class SystemDatabase:
                 admin_row = conn.execute(
                     "SELECT * FROM users WHERE username = ?", (actor.get("username"),)
                 ).fetchone()
+                if not admin_row or admin_row["role"] != ROLE_ADMIN:
+                    return _response(False, "鐧诲綍宸插け鏁?")
                 quota_row = conn.execute(
                     """
                     SELECT * FROM admin_card_quotas

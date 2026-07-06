@@ -139,6 +139,28 @@ class SystemDatabaseTest(unittest.TestCase):
         self.assertTrue(result["success"])
         self.assertNotEqual(result["data"]["card"]["cardKey"], "XYZW-FAKE-FAKE")
 
+    def test_create_license_card_returns_failure_when_admin_actor_no_longer_exists(self):
+        super_admin = self.db.login_user("111", "111")["data"]["user"]
+        self.db.create_admin(
+            super_admin,
+            {
+                "username": "manager",
+                "password": "secret123",
+                "confirmPassword": "secret123",
+                "cardCreateQuota": {"鏈堝崱": 1, "瀛ｅ崱": 0, "骞村崱": 0},
+            },
+        )
+        manager = self.db.login_user("manager", "secret123")["data"]["user"]
+
+        with closing(sqlite3.connect(self.db.db_path)) as conn:
+            conn.execute("DELETE FROM admin_card_quotas WHERE admin_user_id IN (SELECT id FROM users WHERE username = ?)", ("manager",))
+            conn.execute("DELETE FROM users WHERE username = ?", ("manager",))
+            conn.commit()
+
+        result = self.db.create_license_card(manager, {"level": "鏈堝崱", "remark": "ghost"})
+
+        self.assertFalse(result["success"])
+
     def test_super_admin_rebalances_admin_quota_when_moving_or_deleting_unused_card(self):
         super_admin = self.db.login_user("111", "111")["data"]["user"]
         self.db.create_admin(

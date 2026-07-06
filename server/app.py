@@ -21,22 +21,29 @@ def create_app(db_path: str | None = None) -> Flask:
     def current_user():
         return session.get("user")
 
-    def require_login():
-        user = current_user()
-        if not user:
-            return None, (jsonify({"success": False, "message": "请先登录", "data": {}}), 401)
-        return user, None
-
     def error_status(message: str) -> int:
-        if any(marker in message for marker in ("无权限", "只有", "不能删除")):
+        if any(marker in message for marker in ("无权限", "只有", "不能删除", "鏃犳潈闄", "鍙湁", "涓嶈兘鍒犻櫎")):
             return 403
-        if any(marker in message for marker in ("请先登录", "登录已失效")):
+        if any(marker in message for marker in ("请先登录", "登录已失效", "璇峰厛鐧诲綍", "鐧诲綍宸插け鏁")):
             return 401
         return 400
 
     def api_response(result: dict, success_status: int = 200):
         status_code = success_status if result.get("success") else error_status(result.get("message", ""))
         return jsonify(result), status_code
+
+    def require_login():
+        user = current_user()
+        if not user:
+            return None, (jsonify({"success": False, "message": "请先登录", "data": {}}), 401)
+
+        result = db.get_user_session_state(user.get("username"))
+        if not result.get("success"):
+            session.pop("user", None)
+            return None, api_response(result)
+
+        session["user"] = result["data"]["user"]
+        return result["data"]["user"], None
 
     def payload():
         return request.get_json(silent=True) or {}

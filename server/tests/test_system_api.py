@@ -1,6 +1,8 @@
 import tempfile
 import unittest
 from pathlib import Path
+import sqlite3
+from contextlib import closing
 
 from server.app import create_app
 
@@ -118,13 +120,11 @@ class SystemApiTest(unittest.TestCase):
         )
 
     def test_admin_permissions_and_admin_routes_use_session(self):
-        self.login()
-
         unauthenticated = self.client.get("/api/system/admins")
-        self.assertEqual(unauthenticated.status_code, 200)
-        self.assertTrue(
-            any(admin["username"] == "111" for admin in unauthenticated.get_json()["data"]["admins"])
-        )
+        self.assertEqual(unauthenticated.status_code, 401)
+        self.assertFalse(unauthenticated.get_json()["success"])
+
+        self.login()
 
         created_admin = self.client.post(
             "/api/system/admins",
@@ -186,6 +186,37 @@ class SystemApiTest(unittest.TestCase):
                 for admin in admins_after_delete.get_json()["data"]["admins"]
             )
         )
+
+    def test_deleted_admin_session_is_rejected_for_card_routes(self):
+        self.login()
+        self.client.post(
+            "/api/system/admins",
+            json={
+                "username": "manager",
+                "password": "secret123",
+                "confirmPassword": "secret123",
+                "cardCreateQuota": {"鏈堝崱": 1, "瀛ｅ崱": 0, "骞村崱": 0},
+            },
+        )
+        self.login("manager", "secret123")
+
+        db_path = Path(self.temp_dir.name) / "system.db"
+        with closing(sqlite3.connect(db_path)) as conn:
+            conn.execute("DELETE FROM admin_card_quotas WHERE admin_user_id IN (SELECT id FROM users WHERE username = ?)", ("manager",))
+            conn.execute("DELETE FROM users WHERE username = ?", ("manager",))
+            conn.commit()
+
+        listed = self.client.get("/api/system/cards")
+        self.assertIn(listed.status_code, (401, 403))
+        self.assertFalse(listed.get_json()["success"])
+
+        created = self.create_card(remark="stale-session")
+        self.assertIn(created.status_code, (401, 403))
+        self.assertFalse(created.get_json()["success"])
+
+        session = self.client.get("/api/auth/session")
+        self.assertEqual(session.status_code, 401)
+        self.assertFalse(session.get_json()["success"])
 
 
 if __name__ == "__main__":
