@@ -381,6 +381,69 @@ class SystemDatabase:
             refreshed = conn.execute("SELECT * FROM users WHERE id = ?", (admin["id"],)).fetchone()
             return _response(True, "额度更新成功", admin=self._serialize_user(conn, refreshed))
 
+    def list_users(self, actor: dict) -> dict:
+        if actor.get("role") != ROLE_SUPER_ADMIN:
+            return _response(False, "无权限")
+
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT *
+                FROM users
+                WHERE role = ?
+                ORDER BY id DESC
+                """,
+                (ROLE_USER,),
+            ).fetchall()
+            return _response(
+                True,
+                "查询成功",
+                users=[self._serialize_user(conn, row) for row in rows],
+            )
+
+    def list_admins(self, actor: dict) -> dict:
+        if actor.get("role") != ROLE_SUPER_ADMIN:
+            return _response(False, "无权限")
+
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT *
+                FROM users
+                WHERE role IN (?, ?)
+                ORDER BY id ASC
+                """,
+                (ROLE_SUPER_ADMIN, ROLE_ADMIN),
+            ).fetchall()
+            return _response(
+                True,
+                "查询成功",
+                admins=[self._serialize_user(conn, row) for row in rows],
+            )
+
+    def delete_admin(self, actor: dict, username: str) -> dict:
+        if actor.get("role") != ROLE_SUPER_ADMIN:
+            return _response(False, "无权限")
+        if not username:
+            return _response(False, "管理员不存在")
+
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT *
+                FROM users
+                WHERE username = ? AND role = ?
+                """,
+                (username, ROLE_ADMIN),
+            ).fetchone()
+            if not row:
+                return _response(False, "管理员不存在")
+
+            admin = self._serialize_user(conn, row)
+            conn.execute("DELETE FROM admin_card_quotas WHERE admin_user_id = ?", (row["id"],))
+            conn.execute("DELETE FROM users WHERE id = ?", (row["id"],))
+            return _response(True, "管理员已删除", admin=admin)
+
     def _serialize_user(self, conn, row):
         data = {
             "id": row["id"],

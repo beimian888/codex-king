@@ -1,10 +1,11 @@
 import tempfile
 import unittest
+from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 import sqlite3
 
-from server.system_database import SystemDatabase
+from server.system_database import LICENSE_LEVELS, SystemDatabase
 
 
 def parse_dt(value):
@@ -24,7 +25,7 @@ class SystemDatabaseTest(unittest.TestCase):
             pass
 
     def fetch_admin_quota(self, username):
-        with sqlite3.connect(self.db.db_path) as conn:
+        with closing(sqlite3.connect(self.db.db_path)) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
                 """
@@ -39,7 +40,7 @@ class SystemDatabaseTest(unittest.TestCase):
         return {row["level"]: {"quota": row["quota"], "used": row["used"]} for row in rows}
 
     def fetch_user_row(self, username):
-        with sqlite3.connect(self.db.db_path) as conn:
+        with closing(sqlite3.connect(self.db.db_path)) as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
         return dict(row) if row else None
@@ -228,6 +229,80 @@ class SystemDatabaseTest(unittest.TestCase):
         self.assertTrue(updated["success"])
         self.assertEqual(updated["data"]["card"]["level"], "年卡")
         self.assertTrue(deleted["success"])
+
+
+    def test_super_admin_can_list_users_and_admins(self):
+        month_level, season_level, year_level = LICENSE_LEVELS
+        super_admin = self.db.login_user("111", "111")["data"]["user"]
+        card = self.db.create_license_card(super_admin, {"level": month_level, "remark": "signup"})["data"]["card"]
+        self.db.register_user(
+            {
+                "username": "alice",
+                "password": "secret123",
+                "confirmPassword": "secret123",
+                "cardKey": card["cardKey"],
+            }
+        )
+        self.db.create_admin(
+            super_admin,
+            {
+                "username": "manager",
+                "password": "secret123",
+                "confirmPassword": "secret123",
+                "cardCreateQuota": {month_level: 1, season_level: 0, year_level: 0},
+            },
+        )
+
+        users = self.db.list_users(super_admin)
+        admins = self.db.list_admins(super_admin)
+
+        self.assertTrue(users["success"])
+        self.assertTrue(any(user["username"] == "alice" for user in users["data"]["users"]))
+        self.assertTrue(admins["success"])
+        self.assertTrue(any(admin["username"] == "111" for admin in admins["data"]["admins"]))
+        self.assertTrue(any(admin["username"] == "manager" for admin in admins["data"]["admins"]))
+
+    def test_non_super_admin_cannot_list_or_delete_admins(self):
+        month_level, season_level, year_level = LICENSE_LEVELS
+        super_admin = self.db.login_user("111", "111")["data"]["user"]
+        self.db.create_admin(
+            super_admin,
+            {
+                "username": "manager",
+                "password": "secret123",
+                "confirmPassword": "secret123",
+                "cardCreateQuota": {month_level: 1, season_level: 0, year_level: 0},
+            },
+        )
+        manager = self.db.login_user("manager", "secret123")["data"]["user"]
+
+        users = self.db.list_users(manager)
+        admins = self.db.list_admins(manager)
+        deleted = self.db.delete_admin(manager, "manager")
+
+        self.assertFalse(users["success"])
+        self.assertFalse(admins["success"])
+        self.assertFalse(deleted["success"])
+
+    def test_super_admin_can_delete_admin(self):
+        month_level, season_level, year_level = LICENSE_LEVELS
+        super_admin = self.db.login_user("111", "111")["data"]["user"]
+        self.db.create_admin(
+            super_admin,
+            {
+                "username": "manager",
+                "password": "secret123",
+                "confirmPassword": "secret123",
+                "cardCreateQuota": {month_level: 1, season_level: 0, year_level: 0},
+            },
+        )
+
+        deleted = self.db.delete_admin(super_admin, "manager")
+        admins = self.db.list_admins(super_admin)
+
+        self.assertTrue(deleted["success"])
+        self.assertEqual(deleted["data"]["admin"]["username"], "manager")
+        self.assertFalse(any(admin["username"] == "manager" for admin in admins["data"]["admins"]))
 
 
 if __name__ == "__main__":
