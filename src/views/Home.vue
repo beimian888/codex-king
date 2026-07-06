@@ -175,6 +175,18 @@
         </p>
       </div>
 
+      <p class="hero-intro-blur" :aria-label="heroIntroText">
+        <span
+          v-for="(segment, index) in heroIntroSegments"
+          :key="`${segment}-${index}`"
+          class="hero-intro-segment"
+          :style="{ '--intro-index': index }"
+          aria-hidden="true"
+        >
+          {{ segment }}
+        </span>
+      </p>
+
       <div class="mobile-login hero-anim hero-fade" style="animation-delay: 0.7s">
         <button
           class="button"
@@ -209,6 +221,8 @@ const BG_IMAGE_2 =
   "https://images.higgs.ai/?default=1&output=webp&url=https%3A%2F%2Fd8j0ntlcm91z4.cloudfront.net%2Fuser_38xzZboKViGWJOttwIXH07lWA1P%2Fhf_20260609_201152_bba90a12-bf12-459f-91f0-51f237dbaf3b.png&w=1280&q=85";
 const SPOTLIGHT_R = 260;
 const SYSTEM_AUTH_REMEMBER_KEY = "xyzw_system_auth_remember";
+const heroIntroText =
+  "北冕之王是一款面向《咸鱼之王》玩家的网页综合管理平台，提供账号管理、游戏功能、网页游戏和日常任务等模块，帮助用户更高效地管理多个游戏账号和更好的游戏体验。";
 
 const navItems = [
   { id: "option1", label: "账号管理", to: "/admin/account-management" },
@@ -240,6 +254,7 @@ const isSystemLoggedIn = computed(() => Boolean(currentSystemSession.value?.user
 const loginButtonText = computed(() =>
   isSystemLoggedIn.value ? `欢迎 ${currentSystemSession.value.username}` : "登录",
 );
+const heroIntroSegments = computed(() => Array.from(heroIntroText));
 const maskCanvas = ref(null);
 const maskUrl = ref("");
 const mouse = { x: -999, y: -999 };
@@ -374,8 +389,8 @@ const openLoginModal = () => {
   isLoginModalVisible.value = true;
 };
 
-const handleSystemLogout = () => {
-  logoutSystemUser();
+const handleSystemLogout = async () => {
+  await logoutSystemUser();
   isLoginModalVisible.value = false;
   authMode.value = "login";
   activeNavOption.value = "";
@@ -409,7 +424,7 @@ const resetAuthForm = () => {
   authFeedbackType.value = "error";
 };
 
-const handleAuthSubmit = () => {
+const handleAuthSubmit = async () => {
   if (isAuthSubmitting.value) {
     return;
   }
@@ -418,13 +433,13 @@ const handleAuthSubmit = () => {
   authFeedback.value = "";
 
   const result = isRegisterMode.value
-    ? registerSystemUser({
+    ? await registerSystemUser({
         username: authForm.username,
         password: authForm.password,
         confirmPassword: authForm.confirmPassword,
         cardKey: authForm.cardKey,
       })
-    : loginSystemUser({
+    : await loginSystemUser({
         username: authForm.username,
         password: authForm.password,
       });
@@ -439,9 +454,16 @@ const handleAuthSubmit = () => {
   }
 
   message.success(result.message);
+  if (isRegisterMode.value) {
+    isLoginModalVisible.value = false;
+    authMode.value = "login";
+    resetAuthForm();
+  }
+
   if (!isRegisterMode.value) {
     saveRememberedAuth();
   }
+  currentSystemSession.value = getCurrentSystemSession();
   refreshSystemSession();
   router.push("/admin/system-management");
 };
@@ -1143,6 +1165,98 @@ onBeforeUnmount(() => {
   transform: scale(1);
 }
 
+.button,
+.mobile-menu-trigger,
+.mobile-menu-action,
+.login-submit,
+.login-register-switch {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.25);
+  box-shadow:
+    0 8px 32px 0 rgba(31, 38, 135, 0.2),
+    0 2px 16px 0 rgba(31, 38, 135, 0.1),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.4),
+    inset 0 -1px 0 0 rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(12px) saturate(1.8) brightness(1.1);
+  -webkit-backdrop-filter: blur(12px) saturate(1.8) brightness(1.1);
+  transition:
+    opacity 0.26s ease-out,
+    color 300ms cubic-bezier(0.23, 1, 0.32, 1),
+    transform 300ms cubic-bezier(0.23, 1, 0.32, 1),
+    border-color 240ms ease,
+    box-shadow 300ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  .button,
+  .mobile-menu-trigger,
+  .mobile-menu-action,
+  .login-submit,
+  .login-register-switch,
+  .login-close {
+    border-color: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.1);
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.2),
+      inset 0 -1px 0 0 rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(12px) saturate(1.8) brightness(1.2);
+    -webkit-backdrop-filter: blur(12px) saturate(1.8) brightness(1.2);
+  }
+}
+
+@supports not (backdrop-filter: blur(10px)) {
+  .button,
+  .mobile-menu-trigger,
+  .mobile-menu-action,
+  .login-submit,
+  .login-register-switch,
+  .login-close {
+    background: rgba(255, 255, 255, 0.4);
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.5),
+      inset 0 -1px 0 0 rgba(255, 255, 255, 0.3);
+  }
+
+  .button::after,
+  .mobile-menu-trigger::after,
+  .mobile-menu-action::after,
+  .login-submit::after,
+  .login-register-switch::after,
+  .login-close::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    background: rgba(255, 255, 255, 0.15);
+    pointer-events: none;
+  }
+}
+
+@supports not (backdrop-filter: blur(10px)) {
+  @media (prefers-color-scheme: dark) {
+    .button,
+    .mobile-menu-trigger,
+    .mobile-menu-action,
+    .login-submit,
+    .login-register-switch,
+    .login-close {
+      background: rgba(0, 0, 0, 0.4);
+    }
+
+    .button::after,
+    .mobile-menu-trigger::after,
+    .mobile-menu-action::after,
+    .login-submit::after,
+    .login-register-switch::after,
+    .login-close::after {
+      background: rgba(255, 255, 255, 0.05);
+    }
+  }
+}
+
 .hero-stage {
   position: relative;
   width: 100%;
@@ -1219,6 +1333,35 @@ onBeforeUnmount(() => {
   letter-spacing: 0.08em;
 }
 
+.hero-intro-blur {
+  position: absolute;
+  right: clamp(32px, 4vw, 72px);
+  bottom: clamp(44px, 10vh, 96px);
+  z-index: 55;
+  display: flex;
+  width: min(520px, calc(100vw - 56px));
+  flex-wrap: wrap;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: clamp(14px, 1.25vw, 18px);
+  font-weight: 500;
+  line-height: 1.9;
+  letter-spacing: 0;
+  text-align: left;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.76);
+  pointer-events: none;
+}
+
+.hero-intro-segment {
+  display: inline-block;
+  opacity: 0;
+  filter: blur(10px);
+  transform: translateY(34px);
+  animation: intro-blur-in 700ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: calc(0.78s + var(--intro-index) * 22ms);
+  will-change: transform, filter, opacity;
+}
+
 .hero-anim {
   opacity: 0;
   animation-fill-mode: forwards;
@@ -1271,6 +1414,26 @@ onBeforeUnmount(() => {
 
   100% {
     opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes intro-blur-in {
+  0% {
+    opacity: 0;
+    filter: blur(10px);
+    transform: translateY(34px);
+  }
+
+  55% {
+    opacity: 0.58;
+    filter: blur(5px);
+    transform: translateY(-4px);
+  }
+
+  100% {
+    opacity: 1;
+    filter: blur(0);
     transform: translateY(0);
   }
 }
@@ -1414,6 +1577,19 @@ onBeforeUnmount(() => {
   .hero-copy p {
     font-size: clamp(20px, 7vw, 32px);
   }
+
+  .hero-intro-blur {
+    left: 20px;
+    right: 20px;
+    bottom: 7dvh;
+    width: auto;
+    font-size: 13px;
+    line-height: 1.75;
+  }
+
+  .hero-intro-segment {
+    animation-delay: calc(0.78s + var(--intro-index) * 14ms);
+  }
 }
 
 @media (min-width: 768px) {
@@ -1443,6 +1619,11 @@ onBeforeUnmount(() => {
     gap: 10px;
     font-size: clamp(42px, 13vw, 58px);
   }
+
+  .hero-intro-blur {
+    bottom: 6dvh;
+    font-size: 12px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1469,6 +1650,13 @@ onBeforeUnmount(() => {
 
   .button.is-welcome:hover .login-button-logout,
   .button.is-welcome:focus-visible .login-button-logout {
+    animation: none;
+  }
+
+  .hero-intro-segment {
+    opacity: 1;
+    filter: blur(0);
+    transform: none;
     animation: none;
   }
 }

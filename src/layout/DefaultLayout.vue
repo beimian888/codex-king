@@ -330,8 +330,8 @@ const goToAccountManagement = () => {
   router.push("/admin/account-management");
 };
 
-const handleSystemLogout = () => {
-  logoutSystemUser();
+const handleSystemLogout = async () => {
+  await logoutSystemUser();
   isAccountMenuOpen.value = false;
   message.success("已退出登录");
   router.push("/");
@@ -349,7 +349,14 @@ const handleSystemLogout = () => {
 }
 
 .default-layout.web-game-layout {
-  background: #05070b;
+  --web-game-layout-bg:
+    radial-gradient(circle at 16% 0%, rgba(14, 165, 233, 0.14), transparent 31%),
+    linear-gradient(180deg, #f7fbff 0%, #edf4fb 100%);
+  background: var(--web-game-layout-bg, var(--app-background));
+}
+
+:global([data-theme="dark"] .default-layout.web-game-layout) {
+  --web-game-layout-bg: #05070b;
 }
 
 .app-ambient-background {

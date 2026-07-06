@@ -98,18 +98,29 @@
             </div>
           </form>
 
-          <div class="sort-bar" aria-label="卡密排序">
-            <span>排序</span>
-            <button
-              v-for="option in sortOptions"
-              :key="option.key"
-              class="sort-button"
-              :class="{ active: sortKey === option.key }"
-              type="button"
-              @click="sortKey = option.key"
-            >
-              {{ option.label }}
-            </button>
+          <div class="filter-bar" aria-label="卡密筛选">
+            <span class="filter-label">筛选</span>
+            <n-select
+              v-model:value="licenseCardFilterField"
+              class="filter-select"
+              size="small"
+              :options="filterFieldOptions"
+            />
+            <n-select
+              v-model:value="licenseCardFilterValue"
+              class="filter-select filter-value-select"
+              size="small"
+              :options="licenseCardFilterValueOptions"
+              placeholder="选择内容"
+              clearable
+            />
+            <n-input
+              v-model:value="licenseCardSearchKeyword"
+              class="license-card-search"
+              size="small"
+              placeholder="搜索卡密"
+              clearable
+            />
           </div>
 
           <div class="system-table-scroll">
@@ -129,7 +140,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="card in sortedLicenseCards" :key="card.cardKey">
+                <tr v-for="card in filteredLicenseCards" :key="card.cardKey">
                   <td class="card-key-cell">{{ card.cardKey }}</td>
                   <td v-if="isSuperAdmin">{{ card.createdBy || "系统" }}</td>
                   <td>{{ card.level }}</td>
@@ -166,7 +177,6 @@
                       size="small"
                       secondary
                       type="error"
-                      :disabled="card.status === 'used'"
                       @click="handleDeleteLicenseCard(card)"
                     >
                       删除
@@ -191,6 +201,7 @@
                     <th>未使用卡密</th>
                     <th>生成时间</th>
                     <th>备注</th>
+                    <th>操作</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -198,6 +209,16 @@
                     <td class="card-key-cell">{{ card.cardKey }}</td>
                     <td>{{ card.createdAt }}</td>
                     <td class="remark-cell">{{ card.remark || "-" }}</td>
+                    <td class="card-action-cell">
+                      <n-button size="small" secondary @click="copyCardKey(card)">
+                        <template #icon>
+                          <n-icon>
+                            <CopyOutline />
+                          </n-icon>
+                        </template>
+                        复制
+                      </n-button>
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -431,8 +452,8 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from "vue";
-import { useMessage } from "naive-ui";
+import { computed, reactive, ref, watch } from "vue";
+import { useDialog, useMessage } from "naive-ui";
 import {
   SYSTEM_ROLE_SUPER_ADMIN,
   createSystemLicenseCard,
@@ -440,7 +461,6 @@ import {
   deleteSystemLicenseCard,
   createSystemAdmin,
   deleteSystemAdmin,
-  getSystemAdmins,
   isSystemSuperAdminSession,
   refreshSystemManagementData,
   updateSystemAdminCardQuota,
@@ -458,10 +478,12 @@ import {
 } from "@vicons/ionicons5";
 
 const message = useMessage();
+const dialog = useDialog();
 
 const activeSection = ref("cards");
-const sortKey = ref("createdAt");
-const systemData = refreshSystemManagementData();
+const licenseCardFilterField = ref("level");
+const licenseCardFilterValue = ref(null);
+const licenseCardSearchKeyword = ref("");
 const isSuperAdmin = ref(isSystemSuperAdminSession());
 
 const adminMenuItems = [
@@ -508,11 +530,10 @@ const superAdminMenuItems = [
 
 const menuItems = computed(() => isSuperAdmin.value ? superAdminMenuItems : adminMenuItems);
 
-const sortOptions = [
-  { key: "createdAt", label: "生成时间" },
-  { key: "level", label: "档位" },
-  { key: "status", label: "状态" },
-  { key: "usedAt", label: "使用时间" },
+const filterFieldOptions = [
+  { label: "档位", value: "level" },
+  { label: "状态", value: "status" },
+  { label: "生成人", value: "createdBy" },
 ];
 
 const licenseLevelOptions = [
@@ -526,9 +547,9 @@ const quotaLevelOptions = [
   { label: "年卡", value: "年卡", quotaLabel: "年卡额度" },
 ];
 
-const licenseCards = ref(systemData.licenseCards);
-const users = ref(systemData.users);
-const admins = ref(systemData.admins || getSystemAdmins());
+const licenseCards = ref([]);
+const users = ref([]);
+const admins = ref([]);
 const editingCardKey = ref("");
 const unusedCardsModalVisible = ref(false);
 const selectedUnusedCardsLevel = ref("月卡");
@@ -554,6 +575,23 @@ const levelOrder = {
   月卡: 1,
   季卡: 2,
   年卡: 3,
+};
+
+const getLicenseCardFilterText = (card, field) => {
+  if (field === "status") {
+    return card.statusText || card.status || "";
+  }
+  if (field === "createdBy") {
+    return card.createdBy || "系统";
+  }
+  return card.level || "";
+};
+
+const getLicenseCardFilterValue = (card, field) => {
+  if (field === "createdBy") {
+    return card.createdBy || "系统";
+  }
+  return card[field] || "";
 };
 
 const createEmptyQuotaDraft = () =>
@@ -590,19 +628,52 @@ const selectedUnusedCards = computed(() =>
   ),
 );
 
-const sortedLicenseCards = computed(() => {
-  return [...licenseCards.value].sort((a, b) => {
-    if (sortKey.value === "level") {
-      return levelOrder[a.level] - levelOrder[b.level];
+const licenseCardFilterValueOptions = computed(() => {
+  const field = licenseCardFilterField.value;
+  const optionMap = new Map();
+
+  licenseCards.value.forEach((card) => {
+    const value = getLicenseCardFilterValue(card, field);
+    if (!value) {
+      return;
     }
-    if (sortKey.value === "status") {
-      return a.status.localeCompare(b.status);
-    }
-    if (sortKey.value === "usedAt") {
-      return (b.usedAt || "").localeCompare(a.usedAt || "");
-    }
-    return b.createdAt.localeCompare(a.createdAt);
+    optionMap.set(value, {
+      label: getLicenseCardFilterText(card, field),
+      value,
+    });
   });
+
+  return [...optionMap.values()].sort((a, b) => {
+    if (field === "level") {
+      return (levelOrder[a.value] || 99) - (levelOrder[b.value] || 99);
+    }
+    return a.label.localeCompare(b.label, "zh-CN");
+  });
+});
+
+const filteredLicenseCards = computed(() => {
+  const field = licenseCardFilterField.value;
+  const filterValue = licenseCardFilterValue.value;
+  const keyword = licenseCardSearchKeyword.value.trim().toLowerCase();
+
+  return licenseCards.value
+    .filter((card) => {
+      if (!filterValue) {
+        return true;
+      }
+      return getLicenseCardFilterValue(card, field) === filterValue;
+    })
+    .filter((card) => {
+      if (!keyword) {
+        return true;
+      }
+      return card.cardKey.toLowerCase().includes(keyword);
+    })
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+});
+
+watch(licenseCardFilterField, () => {
+  licenseCardFilterValue.value = null;
 });
 
 const openUnusedCardsModal = (level) => {
@@ -663,20 +734,20 @@ const resetLicenseCardForm = () => {
   licenseCardForm.remark = "";
 };
 
-const refreshSystemState = () => {
-  const data = refreshSystemManagementData();
+const loadSystemData = async () => {
+  const data = await refreshSystemManagementData();
   isSuperAdmin.value = isSystemSuperAdminSession();
-  licenseCards.value = data.licenseCards;
-  users.value = data.users;
-  admins.value = data.admins;
+  licenseCards.value = data.licenseCards || [];
+  users.value = data.users || [];
+  admins.value = data.admins || [];
   syncAdminQuotaDrafts();
   if (!isSuperAdmin.value && activeSection.value !== "cards") {
     activeSection.value = "cards";
   }
 };
 
-const handleCreateLicenseCard = () => {
-  const result = createSystemLicenseCard({
+const handleCreateLicenseCard = async () => {
+  const result = await createSystemLicenseCard({
     level: licenseCardForm.level,
     remark: licenseCardForm.remark,
   });
@@ -686,7 +757,7 @@ const handleCreateLicenseCard = () => {
     return;
   }
 
-  refreshSystemState();
+  await loadSystemData();
   resetLicenseCardForm();
   message.success(result.message);
 };
@@ -697,8 +768,8 @@ const handleStartEditLicenseCard = (card) => {
   licenseCardForm.remark = card.remark || "";
 };
 
-const handleUpdateLicenseCard = () => {
-  const result = updateSystemLicenseCard(editingCardKey.value, {
+const handleUpdateLicenseCard = async () => {
+  const result = await updateSystemLicenseCard(editingCardKey.value, {
     level: licenseCardForm.level,
     remark: licenseCardForm.remark,
   });
@@ -708,28 +779,35 @@ const handleUpdateLicenseCard = () => {
     return;
   }
 
-  refreshSystemState();
+  await loadSystemData();
   resetLicenseCardForm();
   message.success(result.message);
 };
 
 const handleDeleteLicenseCard = (card) => {
-  const result = deleteSystemLicenseCard(card.cardKey);
-  if (!result.success) {
-    message.error(result.message);
-    return;
-  }
+  dialog.warning({
+    title: "是否删除卡密",
+    content: card.cardKey,
+    positiveText: "删除",
+    negativeText: "取消",
+    onPositiveClick: async () => {
+      const result = await deleteSystemLicenseCard(card.cardKey);
+      if (!result.success) {
+        message.error(result.message);
+        return;
+      }
 
-  refreshSystemState();
-  if (editingCardKey.value === card.cardKey) {
-    resetLicenseCardForm();
-  }
-  message.success(result.message);
+      await loadSystemData();
+      if (editingCardKey.value === card.cardKey) {
+        resetLicenseCardForm();
+      }
+      message.success(result.message);
+    },
+  });
 };
 
-const refreshCards = () => {
-  refreshSystemState();
-  sortKey.value = "createdAt";
+const refreshCards = async () => {
+  await loadSystemData();
   message.success("已刷新系统管理数据");
 };
 
@@ -740,8 +818,8 @@ const resetAdminForm = () => {
   adminForm.cardCreateQuota = createEmptyQuotaDraft();
 };
 
-const handleCreateAdmin = () => {
-  const result = createSystemAdmin({
+const handleCreateAdmin = async () => {
+  const result = await createSystemAdmin({
     username: adminForm.username,
     password: adminForm.password,
     confirmPassword: adminForm.confirmPassword,
@@ -753,14 +831,13 @@ const handleCreateAdmin = () => {
     return;
   }
 
-  admins.value = getSystemAdmins();
-  syncAdminQuotaDrafts();
+  await loadSystemData();
   resetAdminForm();
   message.success(result.message);
 };
 
-const handleUpdateAdminCardQuota = (admin) => {
-  const result = updateSystemAdminCardQuota(
+const handleUpdateAdminCardQuota = async (admin) => {
+  const result = await updateSystemAdminCardQuota(
     admin.username,
     adminQuotaDrafts[admin.username] ?? admin.cardCreateQuota ?? createEmptyQuotaDraft(),
   );
@@ -769,29 +846,27 @@ const handleUpdateAdminCardQuota = (admin) => {
     return;
   }
 
-  admins.value = getSystemAdmins();
-  syncAdminQuotaDrafts();
+  await loadSystemData();
   message.success(result.message);
 };
 
-const handleDeleteAdmin = (admin) => {
+const handleDeleteAdmin = async (admin) => {
   if (admin.role === SYSTEM_ROLE_SUPER_ADMIN) {
     message.error("内置超级管理员不能删除");
     return;
   }
 
-  const result = deleteSystemAdmin(admin.username);
+  const result = await deleteSystemAdmin(admin.username);
   if (!result.success) {
     message.error(result.message);
     return;
   }
 
-  admins.value = getSystemAdmins();
-  syncAdminQuotaDrafts();
+  await loadSystemData();
   message.success(result.message);
 };
 
-syncAdminQuotaDrafts();
+loadSystemData();
 </script>
 
 <style scoped lang="scss">
@@ -987,7 +1062,7 @@ syncAdminQuotaDrafts();
   line-height: 1;
 }
 
-.sort-bar {
+.filter-bar {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -998,22 +1073,29 @@ syncAdminQuotaDrafts();
   font-weight: 700;
 }
 
-.sort-button {
-  min-height: 32px;
-  padding: 0 10px;
-  border: 1px solid var(--app-line);
-  border-radius: 7px;
-  background: var(--app-surface-muted);
-  color: var(--text-secondary);
-  font-weight: 700;
-  cursor: pointer;
+.filter-label {
+  flex: 0 0 auto;
 }
 
-.sort-button.active,
-.sort-button:hover {
-  border-color: rgba(var(--primary-color-rgb), 0.28);
-  background: var(--primary-color-light);
-  color: var(--primary-color);
+.filter-select {
+  width: 132px;
+}
+
+.filter-value-select {
+  width: 168px;
+}
+
+.license-card-search {
+  width: min(240px, 100%);
+}
+
+@media (max-width: 640px) {
+  .filter-select,
+  .filter-value-select,
+  .license-card-search {
+    flex: 1 1 160px;
+    width: auto;
+  }
 }
 
 .system-table-scroll {
@@ -1067,7 +1149,7 @@ syncAdminQuotaDrafts();
 
 .unused-cards-table {
   width: 100%;
-  min-width: 560px;
+  min-width: 640px;
   border-collapse: collapse;
   background: var(--app-surface-muted);
 }
@@ -1231,6 +1313,77 @@ syncAdminQuotaDrafts();
 .status-badge.active {
   background: rgba(14, 165, 233, 0.14);
   color: var(--primary-color);
+}
+
+:global([data-theme="dark"] .system-management-page) {
+  --system-control-bg: rgba(15, 23, 42, 0.82);
+  --system-control-bg-focus: rgba(15, 23, 42, 0.94);
+  --system-control-border: rgba(148, 163, 184, 0.28);
+  --system-control-border-focus: rgba(14, 165, 233, 0.58);
+  --system-control-text: rgba(248, 250, 252, 0.94);
+  --system-control-placeholder: rgba(148, 163, 184, 0.82);
+}
+
+:global([data-theme="dark"] .system-management-page .n-input),
+:global([data-theme="dark"] .system-management-page .n-input-number),
+:global([data-theme="dark"] .system-management-page .n-base-selection) {
+  --n-color: var(--system-control-bg) !important;
+  --n-color-focus: var(--system-control-bg-focus) !important;
+  --n-color-active: var(--system-control-bg-focus) !important;
+  --n-border: 1px solid var(--system-control-border) !important;
+  --n-border-hover: 1px solid var(--system-control-border-focus) !important;
+  --n-border-focus: 1px solid var(--system-control-border-focus) !important;
+  --n-border-active: 1px solid var(--system-control-border-focus) !important;
+  --n-box-shadow-focus: 0 0 0 2px rgba(14, 165, 233, 0.16) !important;
+  --n-box-shadow-active: 0 0 0 2px rgba(14, 165, 233, 0.16) !important;
+  --n-text-color: var(--system-control-text) !important;
+  --n-placeholder-color: var(--system-control-placeholder) !important;
+  background: var(--system-control-bg) !important;
+  background-color: var(--system-control-bg) !important;
+  border-color: var(--system-control-border) !important;
+  color: var(--system-control-text) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+:global([data-theme="dark"] .system-management-page .n-input-wrapper),
+:global([data-theme="dark"] .system-management-page .n-base-selection-label) {
+  background: var(--system-control-bg) !important;
+  background-color: var(--system-control-bg) !important;
+  color: var(--system-control-text) !important;
+}
+
+:global([data-theme="dark"] .system-management-page .n-input__input-el),
+:global([data-theme="dark"] .system-management-page .n-input__textarea-el) {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: var(--system-control-text) !important;
+  caret-color: var(--primary-color);
+}
+
+:global([data-theme="dark"] .system-management-page .n-input.n-input--focus),
+:global([data-theme="dark"] .system-management-page .n-base-selection.n-base-selection--active) {
+  background: var(--system-control-bg-focus) !important;
+  background-color: var(--system-control-bg-focus) !important;
+  border-color: var(--system-control-border-focus) !important;
+}
+
+:global([data-theme="dark"] .system-management-page .n-input.n-input--focus .n-input-wrapper),
+:global([data-theme="dark"] .system-management-page .n-base-selection.n-base-selection--active .n-base-selection-label) {
+  background: var(--system-control-bg-focus) !important;
+  background-color: var(--system-control-bg-focus) !important;
+}
+
+:global([data-theme="dark"] .system-management-page .n-input__placeholder),
+:global([data-theme="dark"] .system-management-page .n-base-selection-placeholder),
+:global([data-theme="dark"] .system-management-page .n-base-selection-input__content),
+:global([data-theme="dark"] .system-management-page .n-base-selection-input__content::placeholder) {
+  color: var(--system-control-placeholder) !important;
+}
+
+:global([data-theme="dark"] .system-management-page .n-base-selection .n-base-suffix),
+:global([data-theme="dark"] .system-management-page .n-input .n-base-clear),
+:global([data-theme="dark"] .system-management-page .n-input-number .n-input-number-suffix) {
+  color: rgba(203, 213, 225, 0.78) !important;
 }
 
 .system-empty-state {

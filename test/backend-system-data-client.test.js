@@ -16,6 +16,10 @@ assert(
   source.includes("async function requestSystemApi") || source.includes("const requestSystemApi = async"),
   "data layer must expose an async API request helper",
 );
+assert(
+  source.includes('typeof FormData !== "undefined" && body instanceof FormData'),
+  "data layer must guard FormData usage in environments without FormData",
+);
 assert(source.includes('requestSystemApi("/auth/login"'), "loginSystemUser must call /api/auth/login");
 assert(source.includes('requestSystemApi("/auth/register"'), "registerSystemUser must call /api/auth/register");
 assert(source.includes('requestSystemApi("/system/cards"'), "card list and create calls must use /api/system/cards");

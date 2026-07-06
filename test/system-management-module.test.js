@@ -123,28 +123,72 @@ for (const column of [
 }
 
 assert(systemPage.includes('const activeSection = ref("cards")'), "default section must be card management");
-assert(systemPage.includes('const sortKey = ref("createdAt")'), "default sort key must be createdAt");
+assert(
+  systemPage.includes('const licenseCardFilterField = ref("level")'),
+  "card filter must default to the level field",
+);
+assert(
+  systemPage.includes("const licenseCardFilterValue = ref(null)"),
+  "card filter must allow an empty filter value",
+);
+assert(
+  systemPage.includes('const licenseCardSearchKeyword = ref("")'),
+  "card filter must include a card-key search keyword",
+);
 assert(
   systemPage.includes("refreshSystemManagementData") &&
     systemPage.includes("@/utils/systemManagementData"),
   "page must import the local system management data layer",
 );
 assert(
-  systemPage.includes("const licenseCards = ref(systemData.licenseCards)"),
-  "page must initialize card data from the local system data layer",
+  systemPage.includes("const loadSystemData = async"),
+  "page must define an async system data loader",
 );
 assert(
-  systemPage.includes("const users = ref(systemData.users)"),
-  "page must initialize user data from the local system data layer",
+  systemPage.includes("await refreshSystemManagementData()"),
+  "page must await the async system data refresh helper",
+);
+assert(
+  systemPage.includes("const licenseCards = ref([])") &&
+    systemPage.includes("const users = ref([])") &&
+    systemPage.includes("const admins = ref([])"),
+  "page must initialize system state with empty async-backed refs",
 );
 assert(systemPage.includes("const summaryCards = computed("), "page must compute card summary stats locally");
-assert(systemPage.includes("const sortedLicenseCards = computed("), "page must compute sorted table rows locally");
-assert(systemPage.includes("@click=\"sortKey = option.key\""), "sort buttons must update sortKey");
+assert(systemPage.includes("const filterFieldOptions = ["), "page must define card filter field options");
+assert(
+  systemPage.includes("const licenseCardFilterValueOptions = computed("),
+  "page must compute filter values from existing license cards",
+);
+assert(
+  systemPage.includes("const filteredLicenseCards = computed("),
+  "page must compute filtered table rows locally",
+);
+assert(
+  systemPage.includes('class="filter-bar"') &&
+    systemPage.includes('aria-label="卡密筛选"') &&
+    systemPage.includes('v-model:value="licenseCardFilterField"') &&
+    systemPage.includes('v-model:value="licenseCardFilterValue"') &&
+    systemPage.includes('v-model:value="licenseCardSearchKeyword"'),
+  "card table toolbar must expose field filtering, value filtering, and card-key search",
+);
+assert(
+  systemPage.includes('<tr v-for="card in filteredLicenseCards" :key="card.cardKey">'),
+  "card table must render filtered license cards",
+);
+assert(
+  !systemPage.includes("sortOptions") &&
+    !systemPage.includes("sortKey") &&
+    !systemPage.includes("sortedLicenseCards") &&
+    !systemPage.includes("sort-button"),
+  "card table sorting controls must be replaced by filtering controls",
+);
 assert(systemPage.includes("@click=\"refreshCards\""), "refresh button must call refreshCards");
 assert(systemPage.includes("@click=\"copyCardKey(card)\""), "copy buttons must call copyCardKey with the row");
 assert(systemPage.includes("licenseCards.value = data.licenseCards"), "refresh must reload cards from the data layer");
 assert(systemPage.includes("users.value = data.users"), "refresh must reload users from the data layer");
 assert(systemPage.includes("admins.value = data.admins"), "refresh must reload admins from the data layer");
+assert(systemPage.includes("loadSystemData();"), "page must kick off async data loading on setup");
 assert(systemPage.includes("navigator.clipboard.writeText"), "copy action must use the clipboard API when available");
 assert(systemPage.includes("document.execCommand(\"copy\")"), "copy action must provide a textarea fallback");
 assert(systemPage.includes('class="system-table-scroll"'), "table container must allow horizontal scrolling");
@@ -196,6 +240,26 @@ assert(
     !systemPage.includes("--system-dark-muted-text") &&
     !systemPage.includes("--system-dark-table-header-bg"),
   "system management page must not add a page-level dark overlay theme",
+);
+const darkSystemControlSelectors = [
+  ':global([data-theme="dark"] .system-management-page .n-input)',
+  ':global([data-theme="dark"] .system-management-page .n-input-wrapper)',
+  ':global([data-theme="dark"] .system-management-page .n-input__input-el)',
+  ':global([data-theme="dark"] .system-management-page .n-input__textarea-el)',
+  ':global([data-theme="dark"] .system-management-page .n-input-number)',
+  ':global([data-theme="dark"] .system-management-page .n-base-selection)',
+  ':global([data-theme="dark"] .system-management-page .n-base-selection-label)',
+];
+for (const selector of darkSystemControlSelectors) {
+  assert(
+    systemPage.includes(selector),
+    `system management dark mode must style ${selector} to prevent washed-out inputs`,
+  );
+}
+assert(
+  systemPage.includes("--system-control-bg: rgba(15, 23, 42, 0.82);") &&
+    systemPage.includes("background: var(--system-control-bg) !important;"),
+  "system management dark mode controls must use a deep input surface instead of pale Naive internals",
 );
 for (const column of [
   "用户名",

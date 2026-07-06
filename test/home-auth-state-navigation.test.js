@@ -64,10 +64,11 @@ assert(
   app.includes('placement="top"') &&
     app.includes('container-class="center-message-provider"') &&
     app.includes(".center-message-provider") &&
-    app.includes("height: 100vh") &&
-    app.includes("justify-content: center") &&
-    app.includes("align-items: center"),
-  "global message provider must place warnings in the screen center",
+    app.includes("top: 50% !important;") &&
+    app.includes("left: 50% !important;") &&
+    app.includes("transform: translate(-50%, -50%);") &&
+    app.includes("height: auto;"),
+  "global message provider must place warnings in the screen center without covering the page",
 );
 assert(home.includes("const loginRequiredWarning = ref(null)"), "home must store the active login-required warning");
 assert(home.includes("const showLoginRequiredWarning ="), "home must centralize the login-required warning display");
@@ -102,7 +103,7 @@ assert(
 
 const logoutBlock = blockBetween("const handleSystemLogout =", "const handleLoginButtonClick =");
 assert(
-  logoutBlock.includes("logoutSystemUser()") &&
+  logoutBlock.includes("await logoutSystemUser()") &&
     logoutBlock.includes("refreshSystemSession()"),
   "logged-in users must be able to log out from the welcome button",
 );
@@ -113,6 +114,8 @@ assert(
     authSubmitBlock.indexOf("refreshSystemSession()") < authSubmitBlock.indexOf('router.push("/admin/system-management")'),
   "home must refresh login state before auth success navigation",
 );
+assert(authSubmitBlock.includes("await registerSystemUser({"), "register submit flow must await backend registration");
+assert(authSubmitBlock.includes("await loginSystemUser({"), "login submit flow must await backend login");
 
 assert(
   home.includes('window.addEventListener("storage", refreshSystemSession)'),

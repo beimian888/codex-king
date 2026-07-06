@@ -35,7 +35,7 @@ assert(
 
 assert(
   layout.includes("@click=\"handleSystemLogout\"") &&
-    layout.includes("logoutSystemUser()") &&
+    layout.includes("await logoutSystemUser()") &&
     layout.includes('router.push("/")'),
   "logout must clear the system session and return to the home page",
 );

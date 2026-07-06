@@ -41,6 +41,21 @@ assert(
     systemPage.includes("v-if=\"canManageLicenseCards\""),
   "card edit and delete controls must be gated to super admins",
 );
+assert(
+  systemPage.includes("useDialog") &&
+    systemPage.includes("const dialog = useDialog()") &&
+    systemPage.includes('title: "是否删除卡密"') &&
+    systemPage.includes('positiveText: "删除"') &&
+    systemPage.includes('negativeText: "取消"') &&
+    systemPage.includes("onPositiveClick"),
+  "deleting a card must show a confirmation dialog before removal",
+);
+assert(
+  !systemPage.includes(':disabled="card.status === \'used\'"') &&
+    !systemPage.includes(':disabled="card.status === &quot;used&quot;"') &&
+    !systemPage.includes(':disabled="card.status === \\"used\\""'),
+  "super admin delete buttons must stay enabled for used cards",
+);
 
 assert(
   systemPage.includes("<th v-if=\"isSuperAdmin\">生成人</th>") &&
@@ -70,6 +85,11 @@ assert(
     systemPage.includes("handleUpdateAdminCardQuota"),
   "admin management must expose card creation quota editing",
 );
+assert(systemPage.includes("await createSystemLicenseCard({"), "card creation must await backend api");
+assert(systemPage.includes("await updateSystemLicenseCard("), "card update must await backend api");
+assert(systemPage.includes("await deleteSystemLicenseCard("), "card delete must await backend api");
+assert(systemPage.includes("await updateSystemAdminCardQuota("), "quota update must await backend api");
+assert(systemPage.includes("await deleteSystemAdmin("), "admin delete must await backend api");
 
 assert(
   systemPage.includes("<th>卡密额度</th>") &&
@@ -95,6 +115,19 @@ assert(
     systemPage.includes("生成时间") &&
     systemPage.includes("备注"),
   "summary cards must open a modal listing unused card key, created time, and remark",
+);
+
+const unusedCardsTableStart = systemPage.indexOf('<table class="unused-cards-table">');
+const unusedCardsTableEnd = systemPage.indexOf("</table>", unusedCardsTableStart);
+const unusedCardsTable = systemPage.slice(unusedCardsTableStart, unusedCardsTableEnd);
+
+assert(
+  unusedCardsTableStart !== -1 &&
+    unusedCardsTableEnd !== -1 &&
+    unusedCardsTable.includes("<th>操作</th>") &&
+    unusedCardsTable.includes('@click="copyCardKey(card)"') &&
+    unusedCardsTable.includes("复制"),
+  "unused card modal must include an action column with a copy button",
 );
 
 console.log("system management card CRUD UI and quota controls are present");

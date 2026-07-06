@@ -94,7 +94,10 @@ async function requestSystemApi(path, options = {}) {
 
   if (body !== undefined) {
     requestOptions.body =
-      typeof body === "string" || body instanceof FormData ? body : JSON.stringify(body);
+      typeof body === "string" ||
+      (typeof FormData !== "undefined" && body instanceof FormData)
+        ? body
+        : JSON.stringify(body);
   }
 
   try {

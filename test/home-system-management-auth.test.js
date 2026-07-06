@@ -223,16 +223,19 @@ assert(home.includes('v-model="authForm.username"'), "home username input must b
 assert(home.includes('v-model="authForm.password"'), "home password input must be bound to authForm");
 assert(home.includes('v-model="authForm.confirmPassword"'), "home confirm password input must be bound to authForm");
 assert(home.includes('v-model="authForm.cardKey"'), "home card key input must be bound to authForm");
-assert(home.includes("registerSystemUser({"), "home register mode must call registerSystemUser");
-assert(home.includes("loginSystemUser({"), "home login mode must call loginSystemUser");
+assert(home.includes("await registerSystemUser({"), "home register mode must await backend registration");
+assert(home.includes("await loginSystemUser({"), "home login mode must await backend login");
 assert(home.includes(`router.push("${systemPath}")`), "home auth success must enter system management");
 assert(home.includes('class="auth-feedback"'), "home auth modal must render inline auth feedback");
+assert(home.includes("currentSystemSession.value = getCurrentSystemSession()"), "home auth success must refresh cached session state");
 
 assert(
   systemPage.includes("refreshSystemManagementData") &&
     systemPage.includes("@/utils/systemManagementData"),
   "system management page must read system data through the data layer",
 );
+assert(systemPage.includes("const loadSystemData = async"), "system management must define an async loader");
+assert(systemPage.includes("await refreshSystemManagementData()"), "system management refresh must await backend data");
 assert(systemPage.includes("const users = ref("), "system management page must keep local users state");
 assert(systemPage.includes("activeSection === 'users'"), "user management must render a real users section");
 assert(systemPage.includes("<th>用户名</th>"), "user table must include username column");
@@ -242,7 +245,7 @@ assert(systemPage.includes("licenseCards.value = data.licenseCards"), "refresh m
 assert(systemPage.includes("users.value = data.users"), "refresh must reload users from the data layer");
 assert(
   systemPage.includes('message.success("已刷新系统管理数据")') &&
-    systemPage.includes("const data = refreshSystemManagementData();"),
+    !systemPage.includes("const data = refreshSystemManagementData();"),
   "refresh flow must expose a success feedback path",
 );
 

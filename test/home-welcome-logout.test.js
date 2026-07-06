@@ -152,7 +152,7 @@ assert(
 );
 
 const logoutBlock = blockBetween(home, "const handleSystemLogout =", "const handleLoginButtonClick =");
-assert(logoutBlock.includes("logoutSystemUser();"), "home logout handler must clear the system session");
+assert(logoutBlock.includes("await logoutSystemUser();"), "home logout handler must await session logout");
 assert(logoutBlock.includes("refreshSystemSession();"), "home logout handler must refresh local login state");
 assert(logoutBlock.includes("message.success("), "home logout handler must confirm logout");
 
