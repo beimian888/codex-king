@@ -45,7 +45,7 @@ const router = useRouter();
 }
 
 /* 深色主题下背景 */
-[data-theme="dark"] .not-found-page {
+:global([data-theme="dark"] .not-found-page) {
   background: var(--app-background);
 }
 

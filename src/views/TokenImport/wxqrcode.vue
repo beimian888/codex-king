@@ -702,17 +702,21 @@ const handleImport = async () => {
   roleList.value.forEach((role) => {
     // tokenStore.gameTokens中发现已存在的重复名称，则移出token后重新添加
     const gameToken = tokenStore.gameTokens.find((t) => t.id === role.id);
+    let tokenId = role.id;
     if (gameToken) {
       console.log("移除同名token:", gameToken);
       // tokenStore.removeToken(gameToken.id);
       tokenStore.updateToken(gameToken.id, {
         ...role,
       });
+      tokenId = gameToken.id;
     } else {
-      tokenStore.addToken({
+      const token = tokenStore.addToken({
         ...role,
       });
+      tokenId = token.id;
     }
+    void tokenStore.fetchTokenAvatar(tokenId);
   });
   console.log("当前Token列表:", tokenStore.gameTokens);
   message.success("Token添加成功");

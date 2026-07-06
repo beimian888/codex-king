@@ -683,7 +683,7 @@ watch(
 }
 
 /* 深色主题下背景 */
-[data-theme="dark"] .daily-tasks-page {
+:global([data-theme="dark"] .daily-tasks-page) {
   background: transparent;
 }
 
@@ -700,7 +700,7 @@ watch(
 }
 
 /* 深色主题下头部渐变 */
-[data-theme="dark"] .page-header {
+:global([data-theme="dark"] .page-header) {
   background:
     linear-gradient(135deg, rgba(15, 23, 42, 0.84), rgba(30, 41, 59, 0.62)),
     var(--app-surface);

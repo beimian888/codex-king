@@ -12,12 +12,21 @@
           </div>
 
           <div class="header-actions">
-            <div class="connection-status" :class="connectionStatus">
+            <n-button
+              class="connection-status-button"
+              :class="connectionStatus"
+              :type="connectionButtonType"
+              strong
+              secondary
+              round
+              :title="connectionButtonTitle"
+              @click="toggleConnection"
+            >
               <n-icon>
                 <CloudDone />
               </n-icon>
-              <span>{{ connectionStatusText }}</span>
-            </div>
+              <span>{{ connectionActionLabel }}</span>
+            </n-button>
           </div>
         </div>
       </div>
@@ -33,33 +42,6 @@
       </div>
     </div>
 
-    <!-- WebSocket 连接状态 -->
-    <div class="ws-status-section">
-      <div class="container">
-        <div class="ws-status-card">
-          <div class="status-header">
-            <h3>连接状态</h3>
-            <n-button text @click="toggleConnection">
-              {{ isConnected ? "断开连接" : "重新连接" }}
-            </n-button>
-          </div>
-          <div class="status-content">
-            <div class="status-item">
-              <span>WebSocket状态:</span>
-              <span :class="connectionClass">{{ connectionStatusText }}</span>
-            </div>
-            <div v-if="tokenStore.selectedToken" class="status-item">
-              <span>当前Token:</span>
-              <span>{{ tokenStore.selectedToken.name }}</span>
-            </div>
-            <div v-if="lastActivity" class="status-item">
-              <span>最后活动:</span>
-              <span>{{ lastActivity }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -76,7 +58,6 @@ const tokenStore = useTokenStore();
 
 // 响应式数据
 const showFeedback = ref(true);
-const lastActivity = ref(null);
 const initializedTokenId = ref(null);
 
 // 计算属性
@@ -86,20 +67,22 @@ const connectionStatus = computed(() => {
   return status === "connected" ? "connected" : "disconnected";
 });
 
-const connectionStatusText = computed(() => {
-  if (!tokenStore.selectedToken) return "未选择Token";
-  const status = tokenStore.getWebSocketStatus(tokenStore.selectedToken.id);
-  return status === "connected" ? "已连接" : "未连接";
-});
-
-const connectionClass = computed(() => {
-  return connectionStatus.value === "connected"
-    ? "status-connected"
-    : "status-disconnected";
-});
-
 const isConnected = computed(() => {
   return connectionStatus.value === "connected";
+});
+
+const connectionButtonType = computed(() =>
+  isConnected.value ? "success" : "warning",
+);
+
+const connectionActionLabel = computed(() => {
+  if (!tokenStore.selectedToken) return "选择账号";
+  return isConnected.value ? "已连接" : "重新连接";
+});
+
+const connectionButtonTitle = computed(() => {
+  if (!tokenStore.selectedToken) return "点击前往账号管理";
+  return isConnected.value ? "点击断开连接" : "点击重新连接";
 });
 
 const pickArenaTargetId = (targets) => {
@@ -361,7 +344,7 @@ onUnmounted(() => {
 }
 
 /* 深色主题下背景 */
-[data-theme="dark"] .game-features-page {
+:global([data-theme="dark"] .game-features-page) {
   background: transparent;
 }
 
@@ -377,7 +360,7 @@ onUnmounted(() => {
   padding: 14px 0 12px;
 }
 
-[data-theme="dark"] .page-header {
+:global([data-theme="dark"] .page-header) {
   background:
     linear-gradient(135deg, rgba(15, 23, 42, 0.84), rgba(30, 41, 59, 0.62)),
     var(--app-surface);
@@ -413,14 +396,6 @@ onUnmounted(() => {
   .features-grid-section {
     padding: var(--spacing-md) 0;
   }
-
-  .ws-status-section {
-    padding: 0 0 var(--spacing-lg) 0;
-  }
-
-  .ws-status-card {
-    padding: var(--spacing-md);
-  }
 }
 
 .header-content {
@@ -455,26 +430,19 @@ onUnmounted(() => {
   margin: 0;
 }
 
-.connection-status {
-  display: flex;
-  align-items: center;
+.connection-status-button {
   gap: var(--spacing-xs);
   min-height: 32px;
-  padding: 0 12px;
-  border: 1px solid currentColor;
-  border-radius: 999px;
   font-size: var(--font-size-sm);
   font-weight: 700;
   white-space: nowrap;
 
-  &.connected {
-    background: rgba(24, 160, 88, 0.1);
-    color: var(--success-color);
+  :deep(.n-button__content) {
+    gap: var(--spacing-xs);
   }
 
-  &.disconnected {
-    background: rgba(208, 48, 80, 0.1);
-    color: var(--error-color);
+  &.connected :deep(.n-button__content) {
+    color: var(--success-color);
   }
 }
 
@@ -649,71 +617,6 @@ onUnmounted(() => {
 
 .card-actions {
   margin-top: var(--spacing-lg);
-}
-
-// WebSocket状态区域
-.ws-status-section {
-  padding: 0 0 var(--spacing-xl) 0;
-}
-
-.ws-status-card {
-  background: var(--card-bg);
-  border: 1px solid var(--app-line);
-  border-radius: var(--border-radius-xl);
-  padding: var(--spacing-lg);
-  box-shadow: var(--shadow-light);
-  backdrop-filter: blur(18px) saturate(150%);
-  -webkit-backdrop-filter: blur(18px) saturate(150%);
-}
-
-.status-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--spacing-md);
-
-  h3 {
-    font-size: var(--font-size-lg);
-    font-weight: var(--font-weight-semibold);
-    color: var(--text-primary);
-    margin: 0;
-  }
-}
-
-.status-content {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-sm);
-}
-
-.status-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--spacing-sm) 0;
-  border-bottom: 1px solid var(--border-light);
-
-  &:last-child {
-    border-bottom: none;
-  }
-
-  span:first-child {
-    color: var(--text-secondary);
-    font-size: var(--font-size-sm);
-  }
-
-  span:last-child {
-    font-weight: var(--font-weight-medium);
-    font-size: var(--font-size-sm);
-  }
-}
-
-.status-connected {
-  color: var(--success-color);
-}
-
-.status-disconnected {
-  color: var(--error-color);
 }
 
 // 响应式设计

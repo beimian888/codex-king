@@ -187,9 +187,33 @@ html[data-theme="dark"] .n-form-item-label__text {
 }
 
 html.dark .n-input,
-html[data-theme="dark"] .n-input {
+html.dark .n-input .n-input__input,
+html.dark .n-input .n-input__input-el,
+html.dark .n-input .n-input__suffix,
+html[data-theme="dark"] .n-input,
+html[data-theme="dark"] .n-input .n-input__input,
+html[data-theme="dark"] .n-input .n-input__input-el,
+html[data-theme="dark"] .n-input .n-input__suffix {
   background-color: var(--app-surface-muted) !important;
   border-color: var(--app-line) !important;
+  box-shadow: inset 0 0 0 9999px transparent;
+}
+
+html.dark .n-input .n-input__textarea,
+html.dark .n-input .n-input__textarea-el,
+html[data-theme="dark"] .n-input .n-input__textarea,
+html[data-theme="dark"] .n-input .n-input__textarea-el {
+  background-color: var(--app-surface-muted) !important;
+  box-shadow: inset 0 0 0 9999px transparent;
+}
+
+html.dark .n-input .n-input__input-el:-webkit-autofill,
+html.dark .n-input .n-input__textarea-el:-webkit-autofill,
+html[data-theme="dark"] .n-input .n-input__input-el:-webkit-autofill,
+html[data-theme="dark"] .n-input .n-input__textarea-el:-webkit-autofill {
+  -webkit-text-fill-color: var(--text-primary) !important;
+  -webkit-box-shadow: 0 0 0 1000px var(--app-surface-muted) inset !important;
+  caret-color: var(--text-primary);
 }
 
 html.dark .n-modal,
@@ -247,6 +271,23 @@ html.dark ::placeholder,
 html[data-theme="dark"] .n-input__placeholder,
 html[data-theme="dark"] ::placeholder {
   color: var(--text-tertiary) !important;
+}
+
+.n-modal-mask {
+  background: rgba(226, 232, 240, 0.15) !important;
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+}
+
+html.dark .n-modal-mask,
+html[data-theme="dark"] .n-modal-mask {
+  background: rgba(2, 6, 23, 0.15) !important;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .n-modal-mask {
+    background: rgba(15, 23, 42, 0.15) !important;
+  }
 }
 
 body.dark .n-modal-container,

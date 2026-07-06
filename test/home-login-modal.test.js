@@ -16,8 +16,8 @@ assert(
   "home page must render the 5176 login modal overlay",
 );
 assert(
-  home.includes("@click=\"openLoginModal\""),
-  "home login buttons must open the login modal",
+  home.includes('@click="handleLoginButtonClick"'),
+  "home login buttons must open the login modal through the shared login/logout handler",
 );
 assert(
   !home.includes("@click=\"goTo('/admin/account-management')\""),
@@ -54,8 +54,37 @@ assert(
   "home auth modal title and submit text must switch between login and register",
 );
 assert(home.includes('class="login-close"'), "home login modal must include a close button");
+const closeStyleStart = home.indexOf(".login-close {");
+assert(closeStyleStart !== -1, "home login modal close button must have dedicated positioning styles");
+const closeStyleEnd = home.indexOf("}", closeStyleStart);
+const closeStyleBlock = home.slice(closeStyleStart, closeStyleEnd);
+assert(
+  closeStyleBlock.includes("position: absolute") &&
+    closeStyleBlock.includes("top: 0.75rem") &&
+    closeStyleBlock.includes("right: 0.75rem"),
+  "home login modal close button must be positioned at the top-right of the modal",
+);
+assert(
+  !home.includes(
+    ".button,\n.mobile-menu-trigger,\n.mobile-menu-action,\n.login-submit,\n.login-register-switch,\n.login-close {\n  position: relative;",
+  ),
+  "shared button surface styles must not override the modal close button absolute positioning",
+);
 assert(!home.includes('class="home-login-modal"'), "home page must not use the token import modal");
 assert(!home.includes("WxQrcodeForm"), "home login modal must not import the token QR form");
 assert(!home.includes("SingleBinTokenForm"), "home login modal must not import the token BIN form");
+
+const authSubmitStart = home.indexOf("const handleAuthSubmit =");
+assert(authSubmitStart !== -1, "home page must define the auth submit handler");
+const authSubmitEnd = home.indexOf("const handleLoginKeydown =", authSubmitStart);
+assert(authSubmitEnd !== -1, "home auth submit handler must end before the keydown handler");
+const authSubmitBlock = home.slice(authSubmitStart, authSubmitEnd);
+assert(
+  authSubmitBlock.includes("if (isRegisterMode.value)") &&
+    authSubmitBlock.includes("isLoginModalVisible.value = false") &&
+    authSubmitBlock.includes("resetAuthForm()") &&
+    authSubmitBlock.indexOf("if (isRegisterMode.value)") < authSubmitBlock.indexOf("router.push"),
+  "successful registration must close the register modal and reset the form before login navigation logic",
+);
 
 console.log("home login button opens the 5176 login modal");

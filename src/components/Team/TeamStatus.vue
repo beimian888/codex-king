@@ -1102,7 +1102,7 @@ watch(() => roleInfo.value, initializeAvatar, { deep: true, immediate: true });
 }
 
 // 深色主题优化
-[data-theme="dark"] .team-status-card {
+:global([data-theme="dark"] .team-status-card) {
   .role-profile-header {
     background: linear-gradient(
       135deg,

@@ -39,7 +39,7 @@
       >
         <template #title>
           <h2>
-            添加游戏Token
+            添加账号
           </h2>
         </template>
         <div class="card-header">
@@ -129,33 +129,13 @@
             </n-button-group>
           </n-space>
           <div class="header-actions">
-            <n-button type="success" @click="goToBatchDailyTasks">
-              <template #icon>
-                <n-icon>
-                  <List />
-                </n-icon>
-              </template>
-              批量功能
-            </n-button>
-
             <n-button
               v-if="!showImportForm"
               type="primary"
               @click="showImportForm = true"
             >
-              添加Token
+              添加账号
             </n-button>
-
-            <n-dropdown :options="bulkOptions" @select="handleBulkAction">
-              <n-button>
-                <template #icon>
-                  <n-icon>
-                    <Menu />
-                  </n-icon>
-                </template>
-                批量操作
-              </n-button>
-            </n-dropdown>
           </div>
         </div>
 
@@ -174,7 +154,8 @@
             @click="selectToken(token)"
           >
             <template #title>
-              <a-space class="token-name" align="center">
+              <div class="token-card-header-content">
+                <div class="token-card-identity-row">
                 <n-avatar
                   v-if="token.avatar"
                   :src="token.avatar"
@@ -182,61 +163,39 @@
                   size="small"
                   fallback-src="/icons/xiaoyugan.png"
                 />
-                <span class="token-title-text">{{ token.name }}</span>
+                <span class="token-title-text" :title="token.name">{{ token.name }}</span>
                 <a-tag
                   :color="getServerTagColor(token.id)"
                   v-if="token.server"
                   >{{ token.server }}</a-tag
                 >
-                <!-- 连接状态指示器 -->
-                <a-badge
-                  :status="getTokenStyle(token.id)"
-                  :text="getConnectionStatusText(token.id)"
-                />
-                <!-- 连接状态文字 -->
-                <!-- <a-tag color="green">
-                  {{ getConnectionStatusText(token.id) }}
-                </a-tag> -->
-              </a-space>
-            </template>
-            <template #extra>
-              <n-space class="token-card-actions" size="small" @click.stop>
-                <n-button size="small" @click.stop="editToken(token)">
-                  <template #icon>
-                    <n-icon>
-                      <Create />
-                    </n-icon>
-                  </template>
-                  编辑
-                </n-button>
-                <n-button
-                  size="small"
-                  type="error"
-                  ghost
-                  @click.stop="deleteToken(token)"
-                >
-                  <template #icon>
-                    <n-icon>
-                      <TrashBin />
-                    </n-icon>
-                  </template>
-                  删除
-                </n-button>
-              </n-space>
-              <!-- 原下拉菜单保留代码但隐藏，编辑/删除已移动到外层按钮，其他菜单项不显示 -->
-              <n-dropdown
-                v-show="false"
-                :options="getTokenActions(token)"
-                @select="(key) => handleTokenAction(key, token)"
-              >
-                <n-button v-show="false" text>
-                  <template #icon>
-                    <n-icon>
-                      <EllipsisHorizontal />
-                    </n-icon>
-                  </template>
-                </n-button>
-              </n-dropdown>
+                </div>
+                <div class="token-card-command-row" @click.stop>
+                  <n-space class="token-card-actions" size="small">
+                    <n-button size="small" @click.stop="editToken(token)">
+                      <template #icon>
+                        <n-icon>
+                          <Create />
+                        </n-icon>
+                      </template>
+                      编辑
+                    </n-button>
+                    <n-button
+                      size="small"
+                      type="error"
+                      ghost
+                      @click.stop="deleteToken(token)"
+                    >
+                      <template #icon>
+                        <n-icon>
+                          <TrashBin />
+                        </n-icon>
+                      </template>
+                      删除
+                    </n-button>
+                  </n-space>
+                </div>
+              </div>
             </template>
 
             <template #default>
@@ -336,49 +295,6 @@
                   </n-button>
                 </div>
               </div>
-
-              <!-- 存储类型信息 -->
-              <div class="storage-info">
-                <div class="storage-item">
-                  <span class="storage-label">存储类型：</span>
-                  <n-tag
-                    size="small"
-                    :type="
-                      token.importMethod === 'url' ||
-                      token.importMethod === 'bin' ||
-                      token.importMethod === 'wxQrcode' ||
-                      token.upgradedToPermanent
-                        ? 'success'
-                        : 'warning'
-                    "
-                  >
-                    {{
-                      token.importMethod === "url" ||
-                      token.importMethod === "bin" ||
-                      token.importMethod === "wxQrcode" ||
-                      token.upgradedToPermanent
-                        ? "长期有效"
-                        : "临时存储"
-                    }}
-                  </n-tag>
-                </div>
-              </div>
-            </template>
-            <template #actions>
-              <n-button
-                type="primary"
-                size="large"
-                block
-                :loading="connectingTokens.has(token.id)"
-                @click="startTaskManagement(token)"
-              >
-                <template #icon>
-                  <n-icon>
-                    <Grid />
-                  </n-icon>
-                </template>
-                进入游戏功能
-              </n-button>
             </template>
           </a-card>
         </div>
@@ -542,19 +458,6 @@
 
                   <n-button
                     size="small"
-                    type="primary"
-                    :loading="connectingTokens.has(token.id)"
-                    @click.stop="startTaskManagement(token)"
-                  >
-                    <template #icon>
-                      <n-icon>
-                        <Grid />
-                      </n-icon>
-                    </template>
-                    游戏功能
-                  </n-button>
-                  <n-button
-                    size="small"
                     @click.stop="refreshToken(token)"
                     :loading="refreshingTokens.has(token.id)"
                   >
@@ -597,13 +500,63 @@
           >添加账号</a-button
         >
       </a-empty>
+
+      <section class="account-password-panel" aria-labelledby="account-password-title">
+        <div class="account-password-heading">
+          <h2 id="account-password-title">修改用户密码</h2>
+          <p>修改后下次登录需使用新密码。</p>
+        </div>
+        <form class="account-password-form" @submit.prevent="handleChangePassword">
+          <label class="account-password-field">
+            <span>原密码</span>
+            <n-input
+              v-model:value="passwordForm.currentPassword"
+              type="password"
+              show-password-on="click"
+              clearable
+              autocomplete="current-password"
+              placeholder="请输入原密码"
+            />
+          </label>
+          <label class="account-password-field">
+            <span>新密码</span>
+            <n-input
+              v-model:value="passwordForm.newPassword"
+              type="password"
+              show-password-on="click"
+              clearable
+              autocomplete="new-password"
+              placeholder="不少于 6 位"
+            />
+          </label>
+          <label class="account-password-field">
+            <span>确认新密码</span>
+            <n-input
+              v-model:value="passwordForm.confirmPassword"
+              type="password"
+              show-password-on="click"
+              clearable
+              autocomplete="new-password"
+              placeholder="请再次输入新密码"
+            />
+          </label>
+          <n-button
+            class="account-password-submit"
+            type="primary"
+            attr-type="submit"
+            :loading="isChangingPassword"
+          >
+            保存新密码
+          </n-button>
+        </form>
+      </section>
     </div>
 
-    <!-- 编辑Token模态框 -->
+    <!-- 编辑账号模态框 -->
     <n-modal
       v-model:show="showEditModal"
       preset="card"
-      title="编辑Token"
+      title="编辑账号"
       style="width: 500px"
     >
       <n-form
@@ -616,28 +569,8 @@
         <n-form-item label="名称" path="name">
           <n-input v-model:value="editForm.name" />
         </n-form-item>
-        <n-form-item label="Token字符串" path="token">
-          <n-input
-            v-model:value="editForm.token"
-            type="textarea"
-            :rows="3"
-            placeholder="粘贴Token字符串..."
-            clearable
-          />
-        </n-form-item>
         <n-form-item label="服务器">
           <n-input v-model:value="editForm.server" />
-        </n-form-item>
-        <n-form-item label="WebSocket地址">
-          <n-input v-model:value="editForm.wsUrl" />
-        </n-form-item>
-        <n-form-item label="备注">
-          <n-input
-            v-model:value="editForm.remark"
-            type="textarea"
-            :rows="2"
-            placeholder="添加备注信息..."
-          />
         </n-form-item>
       </n-form>
 
@@ -661,14 +594,12 @@ import WxQrcodeForm from "./wxqrcode.vue";
 import OrbBackground from "@/components/Common/OrbBackground.vue";
 import { useTheme } from "@/composables/useTheme";
 import { useTokenStore, selectedTokenId } from "@/stores/tokenStore";
+import { changeCurrentSystemUserPassword } from "@/utils/systemManagementData";
 import {
   Copy,
   Create,
   EllipsisHorizontal,
-  Grid,
-  List,
   Key,
-  Menu,
   Refresh,
   Star,
   SyncCircle,
@@ -721,7 +652,6 @@ const editFormRef = ref(null);
 const editingToken = ref(null);
 const importMethod = ref("singlebin");
 const refreshingTokens = ref(new Set());
-const connectingTokens = ref(new Set());
 // 视图切换入口已隐藏，默认固定显示卡片视图
 const viewMode = ref("card");
 const dragIndex = ref(null);
@@ -846,15 +776,18 @@ const handleDrop = (index, event) => {
 // 编辑表单
 const editForm = reactive({
   name: "",
-  token: "",
   server: "",
-  wsUrl: "",
-  remark: "",
 });
 
+const passwordForm = reactive({
+  currentPassword: "",
+  newPassword: "",
+  confirmPassword: "",
+});
+const isChangingPassword = ref(false);
+
 const editRules = {
-  name: [{ required: true, message: "请输入Token名称", trigger: "blur" }],
-  token: [{ required: true, message: "请输入Token字符串", trigger: "blur" }],
+  name: [{ required: true, message: "请输入账号名称", trigger: "blur" }],
 };
 
 const bulkOptions = [
@@ -866,6 +799,33 @@ const bulkOptions = [
   { label: "断开所有连接", key: "disconnect" },
   { label: "清除所有Token", key: "clear" },
 ];
+
+const resetPasswordForm = () => {
+  passwordForm.currentPassword = "";
+  passwordForm.newPassword = "";
+  passwordForm.confirmPassword = "";
+};
+
+const handleChangePassword = () => {
+  if (isChangingPassword.value) {
+    return;
+  }
+
+  isChangingPassword.value = true;
+  const result = changeCurrentSystemUserPassword({
+    currentPassword: passwordForm.currentPassword,
+    newPassword: passwordForm.newPassword,
+    confirmPassword: passwordForm.confirmPassword,
+  });
+
+  if (result.success) {
+    resetPasswordForm();
+    message.success(result.message || "密码修改成功");
+  } else {
+    message.error(result.message || "密码修改失败");
+  }
+  isChangingPassword.value = false;
+};
 
 /**
  * 手动打开账号管理卡片
@@ -1200,10 +1160,7 @@ const editToken = (token) => {
   editingToken.value = token;
   Object.assign(editForm, {
     name: token.name,
-    token: token.token,
     server: token.server || "",
-    wsUrl: token.wsUrl || "",
-    remark: token.remark || "",
   });
   showEditModal.value = true;
 };
@@ -1216,13 +1173,10 @@ const saveEdit = async () => {
 
     tokenStore.updateToken(editingToken.value.id, {
       name: editForm.name,
-      token: editForm.token,
       server: editForm.server,
-      wsUrl: editForm.wsUrl,
-      remark: editForm.remark,
     });
 
-    message.success("Token信息已更新");
+    message.success("账号信息已更新");
     showEditModal.value = false;
     editingToken.value = null;
   } catch (error) {
@@ -1268,8 +1222,8 @@ const cancelEditRemark = () => {
 
 const deleteToken = (token) => {
   dialog.warning({
-    title: "删除Token",
-    content: `确定要删除Token "${token.name}" 吗？此操作无法恢复。`,
+    title: "删除账号",
+    content: `确定要删除"${token.name}"吗?`,
     positiveText: "确定删除",
     negativeText: "取消",
     onPositiveClick: async () => {
@@ -1546,19 +1500,6 @@ const formatTime = (timestamp) => {
   return new Date(timestamp).toLocaleString("zh-CN");
 };
 
-const goToBatchDailyTasks = () => {
-  router.push("/admin/batch-daily-tasks");
-};
-
-// 开始任务管理 - 直接跳转到游戏功能
-const startTaskManagement = (token) => {
-  // 选择token
-  tokenStore.selectToken(token.id);
-  // 直接跳转到游戏功能，不等待连接
-  message.success(`正在进入 ${token.name} 的游戏功能`);
-  router.push("/admin/game-features");
-};
-
 // URL参数处理函数
 const handleUrlParams = async () => {
   // 检查是否通过URL传递了token参数
@@ -1690,6 +1631,7 @@ onUnmounted(() => {
   --account-line: rgba(129, 141, 170, 0.24);
   --account-shadow: 0 24px 70px rgba(42, 54, 86, 0.14);
   --account-shadow-soft: 0 14px 36px rgba(42, 54, 86, 0.1);
+  --account-panel-width: 100%;
   min-height: 100vh;
   background:
     linear-gradient(180deg, var(--account-page-bg) 0%, var(--account-page-bg-deep) 100%);
@@ -1758,16 +1700,16 @@ onUnmounted(() => {
 
 /* 深色主题下的页面背景 */
 :global([data-theme="dark"] .token-import-page) {
-  --account-page-bg: #111827;
-  --account-page-bg-deep: #0f172a;
+  --account-page-bg: #05070b;
+  --account-page-bg-deep: #020617;
   --account-ink: #f8fafc;
-  --account-muted: #cbd5e1;
-  --account-glass: rgba(30, 41, 59, 0.34);
-  --account-glass-strong: rgba(30, 41, 59, 0.48);
-  --account-glass-border: rgba(255, 255, 255, 0.2);
-  --account-line: rgba(255, 255, 255, 0.16);
-  --account-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
-  --account-shadow-soft: 0 14px 36px rgba(0, 0, 0, 0.24);
+  --account-muted: #b6c2d2;
+  --account-glass: rgba(15, 23, 42, 0.86);
+  --account-glass-strong: rgba(17, 24, 39, 0.94);
+  --account-glass-border: rgba(148, 163, 184, 0.24);
+  --account-line: rgba(148, 163, 184, 0.18);
+  --account-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+  --account-shadow-soft: 0 16px 38px rgba(0, 0, 0, 0.34);
   background:
     linear-gradient(180deg, var(--account-page-bg) 0%, var(--account-page-bg-deep) 100%);
 }
@@ -1936,7 +1878,7 @@ onUnmounted(() => {
 :global([data-theme="dark"] .n-input__input),
 :global([data-theme="dark"] .n-input__textarea) {
   color: #ffffff !important;
-  background-color: rgba(255, 255, 255, 0.1) !important;
+  background-color: transparent !important;
 }
 
 :global([data-theme="dark"] .n-input__placeholder) {
@@ -1995,13 +1937,20 @@ onUnmounted(() => {
   margin-top: var(--spacing-xl);
 }
 
+.tokens-section,
+.account-password-panel {
+  width: var(--account-panel-width);
+  margin-inline: auto;
+}
+
 .tokens-section {
+  margin-top: 0;
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.14)),
     var(--account-glass);
   border: 1px solid var(--account-glass-border);
-  border-radius: 28px;
-  padding: 22px;
+  border-radius: 24px;
+  padding: 18px;
   box-shadow: var(--account-shadow);
   backdrop-filter: blur(34px) saturate(185%);
   -webkit-backdrop-filter: blur(34px) saturate(185%);
@@ -2014,10 +1963,13 @@ onUnmounted(() => {
 /* 深色主题下的列表区域背景 */
 :global([data-theme="dark"] .tokens-section) {
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04)),
-    var(--account-glass);
+    linear-gradient(180deg, rgba(17, 24, 39, 0.92), rgba(15, 23, 42, 0.86)),
+    var(--account-glass-strong);
   color: var(--account-ink);
   border-color: var(--account-glass-border);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 22px 54px rgba(0, 0, 0, 0.38);
 }
 
 /* 深色主题下的固定头部 */
@@ -2051,8 +2003,86 @@ onUnmounted(() => {
   font-weight: 700;
 }
 
+.account-password-panel {
+  margin-top: 18px;
+  padding: 18px 20px;
+  border: 1px solid var(--account-glass-border);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.58), rgba(255, 255, 255, 0.34)),
+    var(--account-glass);
+  box-shadow: var(--account-shadow-soft);
+  color: var(--account-ink);
+}
+
+.account-password-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+
+  h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--account-ink);
+  }
+
+  p {
+    margin: 0;
+    color: var(--account-muted);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+}
+
+.account-password-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.account-password-field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+
+  > span {
+    color: var(--account-muted);
+    font-size: 13px;
+    font-weight: 700;
+  }
+}
+
+.account-password-field :deep(.n-input) {
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.account-password-submit {
+  min-width: 112px;
+  border-radius: 999px;
+  font-weight: 800;
+}
+
+:global([data-theme="dark"] .account-password-panel) {
+  background:
+    linear-gradient(180deg, rgba(30, 41, 59, 0.82), rgba(15, 23, 42, 0.9)),
+    var(--account-glass-strong);
+  border-color: var(--account-glass-border);
+  box-shadow: var(--account-shadow-soft);
+}
+
+:global([data-theme="dark"] .account-password-field .n-input) {
+  background: rgba(15, 23, 42, 0.86);
+  color: var(--account-ink);
+}
+
 :global([data-theme="dark"] .section-header) {
-  background: rgba(30, 41, 59, 0.38);
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(15, 23, 42, 0.82)) !important;
   border-bottom-color: var(--account-line);
 }
 
@@ -2061,13 +2091,13 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   gap: 14px;
-  margin-bottom: 18px;
+  margin-bottom: 14px;
   position: sticky;
   top: 0;
   z-index: 10;
   background: rgba(255, 255, 255, 0.34);
-  margin: -22px -22px 18px;
-  padding: 18px 24px;
+  margin: -18px -18px 14px;
+  padding: 16px 20px;
   border-bottom: 1px solid var(--account-line);
   backdrop-filter: blur(28px) saturate(180%);
   -webkit-backdrop-filter: blur(28px) saturate(180%);
@@ -2116,12 +2146,20 @@ onUnmounted(() => {
   transform: translateY(0);
 }
 
+:global([data-theme="dark"] .header-actions) {
+  padding: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 999px;
+  background: rgba(2, 6, 23, 0.34) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
 .tokens-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 16px;
   overflow-y: auto;
-  padding: 2px 6px 4px 2px;
+  padding: 14px 2px 2px;
   scrollbar-width: thin;
   scrollbar-color: rgba(129, 141, 170, 0.34) rgba(255, 255, 255, 0.36);
   flex: 1;
@@ -2164,36 +2202,32 @@ onUnmounted(() => {
     transform var(--transition-fast);
 
   :deep(.arco-card-header) {
-    align-items: flex-start;
+    align-items: center;
     border-bottom: 1px solid var(--account-line);
     display: grid;
-    gap: 10px;
     grid-template-columns: minmax(0, 1fr);
     height: auto;
-    min-height: 46px;
+    min-height: 96px;
     overflow: visible;
-    padding: 18px;
+    padding: 18px 20px;
   }
 
   :deep(.arco-card-header-title) {
     flex: 1 1 auto;
+    grid-column: 1;
+    grid-row: 1;
     min-width: 0;
     overflow: visible;
     white-space: normal;
   }
 
   :deep(.arco-card-header-extra) {
-    display: flex;
-    flex-shrink: 0;
-    justify-content: flex-end;
-    min-height: 32px;
-    min-width: 0;
-    overflow: visible;
-    width: 100%;
+    display: none;
   }
 
   :deep(.arco-card-body) {
-    padding: 16px 18px 18px;
+    display: none;
+    padding: 0;
   }
 
   :deep(.arco-card-actions) {
@@ -2290,69 +2324,71 @@ onUnmounted(() => {
   flex: 1;
 }
 
-.token-name {
+.token-card-header-content {
+  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px 16px;
+  min-width: 0;
+  width: 100%;
+}
+
+.token-card-identity-row {
   align-items: center;
   display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
+  width: 100%;
+}
+
+.token-card-identity-row {
   font-size: 15px;
   font-weight: 800;
   color: var(--account-ink);
   line-height: var(--line-height-normal);
-  margin: 0;
-  min-width: 0;
-  max-width: 100%;
-  flex-wrap: wrap;
-  row-gap: var(--spacing-xs);
-  width: 100%;
-
-  :deep(.arco-space-item) {
-    align-items: center;
-    display: flex;
-    min-width: 0;
-  }
-
-  :deep(.arco-space-item:has(.token-title-text)) {
-    flex: 1 1 9rem;
-    max-width: 100%;
-  }
+  gap: 8px;
 
   :deep(.n-avatar) {
     border: 1px solid rgba(255, 255, 255, 0.78);
+    flex: 0 0 auto;
     box-shadow: 0 10px 22px rgba(42, 54, 86, 0.14);
   }
 
   :deep(.arco-tag) {
     border: 0;
     border-radius: 999px;
+    flex: 0 0 auto;
     font-weight: 700;
     line-height: 1.6;
-  }
-
-  :deep(.arco-badge-status-wrapper) {
-    align-items: center;
-    display: inline-flex;
-    gap: 6px;
-  }
-
-  :deep(.arco-badge-status-text) {
-    color: var(--account-ink);
-    font-size: 13px;
-    font-weight: 700;
   }
 }
 
 .token-title-text {
   display: block;
+  flex: 0 1 11rem;
   line-height: var(--line-height-normal);
   min-width: 0;
-  max-width: 100%;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  max-width: min(11rem, 100%);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.token-card-command-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  justify-content: flex-end;
+  min-width: 0;
+  width: 100%;
 }
 
 .token-card-actions {
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end !important;
-  max-width: 180px;
+  margin-left: 0;
+  max-width: none;
   min-height: 32px;
 
   :deep(.n-button) {
@@ -2683,6 +2719,27 @@ onUnmounted(() => {
     gap: 12px;
   }
 
+  .account-password-panel {
+    width: 100%;
+    margin: 18px 0 0;
+    padding: 18px;
+    border-radius: 16px;
+  }
+
+  .account-password-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .account-password-form {
+    grid-template-columns: 1fr;
+  }
+
+  .account-password-submit {
+    width: 100%;
+  }
+
   .brand-logo {
     width: 54px;
     height: 54px;
@@ -2702,7 +2759,7 @@ onUnmounted(() => {
   .tokens-grid {
     grid-template-columns: 1fr;
     gap: 14px;
-    padding: 1px;
+    padding: 19px 1px 1px;
   }
 
   .optional-fields {
@@ -2731,7 +2788,9 @@ onUnmounted(() => {
     :deep(.arco-card-header) {
       align-items: stretch;
       grid-template-columns: minmax(0, 1fr);
+      min-height: 0;
       padding: 16px;
+      row-gap: 12px;
     }
 
     :deep(.arco-card-header-title) {
@@ -2748,8 +2807,17 @@ onUnmounted(() => {
     }
   }
 
+  .token-card-header-content {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .token-card-command-row {
+    justify-content: flex-start;
+  }
+
   .token-card :deep(.arco-card-body) {
-    padding: 14px 16px 16px;
+    padding: 0;
   }
 
   .token-card :deep(.arco-card-actions) {
@@ -2757,7 +2825,8 @@ onUnmounted(() => {
   }
 
   .token-card-actions {
-    justify-content: flex-end !important;
+    justify-content: flex-start !important;
+    margin-left: 0;
     max-width: none;
     width: 100%;
   }
@@ -2820,24 +2889,33 @@ onUnmounted(() => {
   background: var(--bg-primary) !important;
 }
 
-:global([data-theme="dark"] .token-card) {
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04)),
-    var(--account-glass);
-  border-color: var(--account-glass-border);
+:global([data-theme="dark"] .default-layout .token-card.arco-card) {
+  background: linear-gradient(145deg, rgba(30, 41, 59, 0.74), rgba(15, 23, 42, 0.92)), var(--account-glass-strong) !important;
+  border-color: var(--account-glass-border) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 16px 34px rgba(0, 0, 0, 0.34) !important;
 }
 
 :global([data-theme="dark"] .storage-info) {
-  background:
-    linear-gradient(135deg, rgba(51, 65, 85, 0.74), rgba(30, 41, 59, 0.72));
-  border-color: var(--account-line);
+  background: rgba(15, 23, 42, 0.72) !important;
+  border-color: var(--account-line) !important;
+  color: var(--account-ink);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
-:global([data-theme="dark"] .token-card-actions) :deep(.n-button),
-:global([data-theme="dark"] .header-actions) :deep(.n-button:not(.n-button--primary-type):not(.n-button--success-type)) {
-  background: rgba(30, 41, 59, 0.76);
-  border-color: var(--account-line);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+:global([data-theme="dark"] .storage-label) {
+  color: #cbd5e1;
+}
+
+:global([data-theme="dark"] .token-card-actions .n-button),
+:global([data-theme="dark"] .header-actions .n-button:not(.n-button--primary-type):not(.n-button--success-type)) {
+  background: rgba(30, 41, 59, 0.88);
+  border-color: rgba(148, 163, 184, 0.26);
+  color: var(--account-ink);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 10px 24px rgba(0, 0, 0, 0.2);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -135,12 +135,13 @@ const importRules = {
 const handleImport = () => {
   isImporting.value = true;
   try {
-    tokenStore.addToken({
+    const token = tokenStore.addToken({
       name: importForm.name,
       token: importForm.base64Token,
       server: importForm.server,
       wsUrl: importForm.wsUrl,
     });
+    void tokenStore.fetchTokenAvatar(token.id);
     message.success("Token添加成功");
     importForm.name = "";
     importForm.base64Token = "";

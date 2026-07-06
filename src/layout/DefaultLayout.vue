@@ -638,6 +638,14 @@ const handleSystemLogout = async () => {
   min-height: calc(100dvh - 66px);
 }
 
+:global(.web-game-fullscreen-active .default-layout.web-game-layout .dashboard-nav) {
+  display: none;
+}
+
+:global(.web-game-fullscreen-active .default-layout.web-game-layout .main) {
+  min-height: 100dvh;
+}
+
 @media (max-width: 768px) {
   .nav-item span {
     display: none;

@@ -74,16 +74,18 @@ export default defineConfig(async () => {
     dts: "src/auto-imports.d.ts",
   });
 
-  const { ArcoResolver } = componentsResolversModule ?? {};
+  const { ArcoResolver, NaiveUiResolver } = componentsResolversModule ?? {};
+  const componentResolvers = [
+    ArcoResolver &&
+      ArcoResolver({
+        importStyle: false,
+      }),
+    NaiveUiResolver && NaiveUiResolver(),
+  ].filter(Boolean);
+
   const componentsPlugin = componentsModule?.default?.({
     dirs: ["src/components"],
-    resolvers: ArcoResolver
-      ? [
-          ArcoResolver({
-            importStyle: false,
-          }),
-        ]
-      : [],
+    resolvers: componentResolvers,
   });
 
   const unoCssPlugin = unoCssModule?.default?.();

@@ -475,6 +475,70 @@ img {
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
+.glass-surface {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.25);
+  box-shadow:
+    0 8px 32px 0 rgba(31, 38, 135, 0.2),
+    0 2px 16px 0 rgba(31, 38, 135, 0.1),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.4),
+    inset 0 -1px 0 0 rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(12px) saturate(1.8) brightness(1.1);
+  -webkit-backdrop-filter: blur(12px) saturate(1.8) brightness(1.1);
+  transition:
+    opacity 0.26s ease-out,
+    transform var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.glass-surface:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+[data-theme="dark"] .glass-surface {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.2),
+    inset 0 -1px 0 0 rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(12px) saturate(1.8) brightness(1.2);
+  -webkit-backdrop-filter: blur(12px) saturate(1.8) brightness(1.2);
+}
+
+@supports not (backdrop-filter: blur(10px)) {
+  .glass-surface {
+    background: rgba(255, 255, 255, 0.4);
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.5),
+      inset 0 -1px 0 0 rgba(255, 255, 255, 0.3);
+  }
+
+  .glass-surface::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    background: rgba(255, 255, 255, 0.15);
+    pointer-events: none;
+  }
+
+  [data-theme="dark"] .glass-surface {
+    background: rgba(0, 0, 0, 0.4);
+  }
+
+  [data-theme="dark"] .glass-surface::before {
+    background: rgba(255, 255, 255, 0.05);
+  }
+}
+
 // 悬停效果
 .hover-scale {
   transition: transform var(--transition-fast);
@@ -588,6 +652,33 @@ img {
     font-weight: 650;
   }
 
+  button:not(.n-button--text-type):not(.arco-btn-text):not(.arco-btn-icon-only),
+  .n-button:not(.n-button--text-type),
+  .arco-btn:not(.arco-btn-text):not(.arco-btn-icon-only) {
+    position: relative;
+    overflow: hidden;
+    border-color: rgba(255, 255, 255, 0.3) !important;
+    background: rgba(255, 255, 255, 0.25) !important;
+    box-shadow:
+      0 8px 32px 0 rgba(31, 38, 135, 0.2),
+      0 2px 16px 0 rgba(31, 38, 135, 0.1),
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.4),
+      inset 0 -1px 0 0 rgba(255, 255, 255, 0.2) !important;
+    backdrop-filter: blur(12px) saturate(1.8) brightness(1.1);
+    -webkit-backdrop-filter: blur(12px) saturate(1.8) brightness(1.1);
+    transition:
+      opacity 0.26s ease-out,
+      transform var(--transition-fast),
+      border-color var(--transition-fast),
+      box-shadow var(--transition-fast);
+  }
+
+  button:not(:disabled):active,
+  .n-button:not(.n-button--disabled):active,
+  .arco-btn:not(.arco-btn-disabled):active {
+    transform: scale(0.98);
+  }
+
   .n-input,
   .n-base-selection,
   .arco-input-wrapper,
@@ -670,10 +761,60 @@ img {
   .n-input__textarea-el::placeholder {
     color: var(--text-tertiary);
   }
+
+  button:not(.n-button--text-type):not(.arco-btn-text):not(.arco-btn-icon-only),
+  .n-button:not(.n-button--text-type),
+  .arco-btn:not(.arco-btn-text):not(.arco-btn-icon-only) {
+    border-color: rgba(255, 255, 255, 0.2) !important;
+    background: rgba(255, 255, 255, 0.1) !important;
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.2),
+      inset 0 -1px 0 0 rgba(255, 255, 255, 0.1) !important;
+    backdrop-filter: blur(12px) saturate(1.8) brightness(1.2);
+    -webkit-backdrop-filter: blur(12px) saturate(1.8) brightness(1.2);
+  }
+}
+
+.default-layout:not(.web-game-layout) .token-import-page .header-actions .n-button.n-button--primary-type,
+.default-layout:not(.web-game-layout) .token-import-page .account-password-submit.n-button.n-button--primary-type,
+.default-layout:not(.web-game-layout) .token-import-page .account-empty-state .arco-btn.arco-btn-primary {
+  background: linear-gradient(135deg, #0369a1, #075985) !important;
+  border-color: rgba(3, 105, 161, 0.95) !important;
+  color: #ffffff !important;
+  box-shadow:
+    0 12px 24px rgba(3, 105, 161, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.36) !important;
+}
+
+.default-layout:not(.web-game-layout) .token-import-page .n-button--primary-type .n-button__content,
+.default-layout:not(.web-game-layout) .token-import-page .arco-btn-primary .arco-btn-content {
+  color: #ffffff !important;
+  text-shadow: 0 1px 1px rgba(8, 47, 73, 0.28);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .default-layout:not(.web-game-layout) * {
     scroll-behavior: auto !important;
+  }
+}
+
+@supports not (backdrop-filter: blur(10px)) {
+  .default-layout:not(.web-game-layout) {
+    button:not(.n-button--text-type):not(.arco-btn-text):not(.arco-btn-icon-only),
+    .n-button:not(.n-button--text-type),
+    .arco-btn:not(.arco-btn-text):not(.arco-btn-icon-only) {
+      background: rgba(255, 255, 255, 0.4) !important;
+      box-shadow:
+        inset 0 1px 0 0 rgba(255, 255, 255, 0.5),
+        inset 0 -1px 0 0 rgba(255, 255, 255, 0.3) !important;
+    }
+  }
+
+  [data-theme="dark"] .default-layout:not(.web-game-layout) {
+    button:not(.n-button--text-type):not(.arco-btn-text):not(.arco-btn-icon-only),
+    .n-button:not(.n-button--text-type),
+    .arco-btn:not(.arco-btn-text):not(.arco-btn-icon-only) {
+      background: rgba(0, 0, 0, 0.4) !important;
+    }
   }
 }

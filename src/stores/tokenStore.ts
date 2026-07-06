@@ -1421,6 +1421,30 @@ export const useTokenStore = defineStore("tokens", () => {
     }
   };
 
+  const fetchTokenAvatar = async (tokenId: string) => {
+    const token = gameTokens.value.find((item) => item.id === tokenId);
+    if (!token) {
+      wsLogger.warn(`获取头像失败: Token不存在 [${tokenId}]`);
+      return false;
+    }
+
+    try {
+      const connection = wsConnections.value[tokenId];
+      if (connection?.status === "connected" && connection.client) {
+        void sendGetRoleInfo(tokenId).catch((error) => {
+          wsLogger.warn(`已连接账号获取头像失败 [${tokenId}]`, error);
+        });
+        return true;
+      }
+
+      selectToken(tokenId, true);
+      return true;
+    } catch (error) {
+      wsLogger.warn(`启动头像获取失败 [${tokenId}]`, error);
+      return false;
+    }
+  };
+
   // 发送获取数据版本请求
   const sendGetDataBundleVersion = (tokenId: string, params = {}) => {
     return sendMessageWithPromise(tokenId, "system_getdatabundlever", params);
@@ -1946,6 +1970,7 @@ export const useTokenStore = defineStore("tokens", () => {
     updateToken,
     removeToken,
     selectToken,
+    fetchTokenAvatar,
 
     // Base64解析方法
     parseBase64Token,

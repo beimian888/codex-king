@@ -4,105 +4,58 @@
       <!-- Left Column -->
       <div class="left-column">
         <!-- Header -->
-        <div
-          class="page-header"
-          style="
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 12px;
-          "
-        >
-          <div style="display: flex; align-items: center; gap: 16px">
-            <h2>自动任务</h2>
-            <div
-              style="
-                display: flex;
-                align-items: center;
-                gap: 12px;
-                padding: 8px 12px;
-                background-color: #f8f9fa;
-                border-radius: 8px;
-                border: 1px solid #e9ecef;
-              "
-            >
-              <div style="font-size: 14px; color: #495057">
-                共 {{ scheduledTasks.length }} 个定时任务
+        <div class="page-header auto-task-hero">
+          <div class="auto-task-hero-main">
+            <div class="auto-task-title-block">
+              <span class="auto-task-kicker">任务控制台</span>
+              <h2>自动任务</h2>
+            </div>
+
+            <div class="auto-task-summary-list">
+              <div class="auto-task-summary-item">
+                <span class="auto-task-summary-label">定时任务</span>
+                <strong>{{ scheduledTasks.length }}</strong>
               </div>
-              <div
-                v-if="shortestCountdownTask"
-                style="font-size: 14px; font-weight: 500; color: #1677ff"
-              >
-                即将执行：{{ shortestCountdownTask.task.name }} ({{
-                  shortestCountdownTask.countdown.formatted
-                }})
-              </div>
-              <div v-else style="font-size: 14px; color: #6c757d">
-                暂无定时任务
-              </div>
-              <div style="display: flex; gap: 8px">
-                <n-button type="primary" size="small" @click="openTaskModal">
-                  新增定时任务
-                </n-button>
-                <n-button size="small" @click="showTasksModal = true">
-                  查看定时任务
-                </n-button>
-                <n-button size="small" @click="exportConfig">
-                  导出配置
-                </n-button>
-                <n-upload
-                  :show-file-list="false"
-                  accept=".json"
-                  :custom-request="importConfig"
-                >
-                  <n-button size="small">导入配置</n-button>
-                </n-upload>
+              <div class="auto-task-summary-item auto-task-summary-item--wide">
+                <span class="auto-task-summary-label">下次执行</span>
+                <strong v-if="shortestCountdownTask">
+                  {{ shortestCountdownTask.task.name }} ·
+                  {{ shortestCountdownTask.countdown.formatted }}
+                </strong>
+                <strong v-else>暂无定时任务</strong>
               </div>
             </div>
           </div>
-          <div
-            style="
-              display: flex;
-              align-items: center;
-              gap: 12px;
-              padding: 8px 12px;
-              background-color: #f8f9fa;
-              border-radius: 8px;
-              border: 1px solid #e9ecef;
-            "
-          >
-            <n-button
-              type="primary"
-              @click="startBatch"
-              :disabled="isRunning || selectedTokens.length === 0"
-              size="medium"
-            >
-              {{ isRunning ? "执行中..." : "开始执行" }}
-            </n-button>
-            <n-button
-              @click="stopBatch"
-              :disabled="!isRunning"
-              type="error"
-              size="medium"
-            >
-              停止
-            </n-button>
-            <n-button
-              @click="openTemplateManagerModal"
-              type="info"
-              size="medium"
-            >
-              任务模板
-            </n-button>
-            <n-button @click="openBatchSettings" type="default" size="medium">
-              <template #icon>
-                <n-icon>
-                  <Settings />
-                </n-icon>
-              </template>
-              设置
-            </n-button>
+
+          <div class="auto-task-control-board">
+            <div class="auto-task-control-row">
+              <span class="auto-task-control-label">定时管理</span>
+              <n-button type="primary" size="small" @click="openTaskModal">
+                新增定时任务
+              </n-button>
+              <n-button size="small" @click="showTasksModal = true">
+                查看定时任务
+              </n-button>
+            </div>
+
+            <div class="auto-task-control-row auto-task-control-row--primary">
+              <span class="auto-task-control-label">执行控制</span>
+              <n-button
+                @click="openTemplateManagerModal"
+                type="info"
+                size="medium"
+              >
+                任务模板
+              </n-button>
+              <n-button @click="openBatchSettings" type="default" size="medium">
+                <template #icon>
+                  <n-icon>
+                    <Settings />
+                  </n-icon>
+                </template>
+                设置
+              </n-button>
+            </div>
           </div>
         </div>
 
@@ -3850,206 +3803,6 @@ const deselectAllTasks = () => {
 };
 
 // ======================
-// Import/Export Config
-// ======================
-
-// Export all tokens and scheduled tasks configuration
-const exportConfig = () => {
-  try {
-    // Get all valid token IDs
-    const validTokenIds = new Set(tokens.value.map((t) => t.id));
-
-    // Filter scheduled tasks: remove invalid token IDs from selectedTokens
-    const filteredScheduledTasks = scheduledTasks.value
-      .map((task) => ({
-        ...task,
-        selectedTokens:
-          task.selectedTokens?.filter((tokenId) =>
-            validTokenIds.has(tokenId),
-          ) || [],
-      }))
-      .filter((task) => task.selectedTokens.length > 0); // Remove tasks with no valid tokens
-
-    // Gather token settings
-    const tokenSettings = [];
-    tokens.value.forEach((token) => {
-      const settings = localStorage.getItem(`daily-settings:${token.id}`);
-      if (settings) {
-        try {
-          tokenSettings.push({
-            tokenId: token.id,
-            settings: JSON.parse(settings),
-          });
-        } catch (e) {
-          console.warn(`Failed to parse settings for token ${token.id}`, e);
-        }
-      }
-    });
-
-    const exportData = {
-      version: "1.1",
-      exportTime: new Date().toISOString(),
-      tokens: tokens.value.map((t) => ({
-        id: t.id,
-        name: t.name,
-        token: t.token,
-        server: t.server,
-        wsUrl: t.wsUrl,
-        remark: t.remark,
-        importMethod: t.importMethod,
-        sourceUrl: t.sourceUrl,
-        upgradedToPermanent: true,
-        upgradedAt: t.upgradedAt,
-        updatedAt: t.updatedAt,
-      })),
-      scheduledTasks: filteredScheduledTasks,
-      batchSettings: {
-        boxCount: batchSettings.boxCount,
-        fishCount: batchSettings.fishCount,
-        recruitCount: batchSettings.recruitCount,
-        defaultBoxType: batchSettings.defaultBoxType,
-        defaultFishType: batchSettings.defaultFishType,
-        carMinColor: batchSettings.carMinColor,
-        commandDelay: batchSettings.commandDelay,
-        taskDelay: batchSettings.taskDelay,
-        actionDelay: batchSettings.actionDelay,
-        battleDelay: batchSettings.battleDelay,
-        refreshDelay: batchSettings.refreshDelay,
-        longDelay: batchSettings.longDelay,
-        maxActive: batchSettings.maxActive,
-        tokenListColumns: batchSettings.tokenListColumns,
-        useGoldRefreshFallback: batchSettings.useGoldRefreshFallback,
-        smartDepartureGoldThreshold: batchSettings.smartDepartureGoldThreshold,
-        smartDepartureRecruitThreshold:
-          batchSettings.smartDepartureRecruitThreshold,
-        smartDepartureJadeThreshold: batchSettings.smartDepartureJadeThreshold,
-        smartDepartureTicketThreshold:
-          batchSettings.smartDepartureTicketThreshold,
-        smartDepartureMatchAll: batchSettings.smartDepartureMatchAll,
-      },
-      tokenSettings: tokenSettings,
-    };
-
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `xyzw_config_${new Date().toISOString().slice(0, 10)}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-
-    message.success(
-      `导出成功: ${exportData.tokens.length} 个账号, ${exportData.scheduledTasks.length} 个定时任务`,
-    );
-  } catch (error) {
-    console.error("Export failed:", error);
-    message.error("导出失败: " + error.message);
-  }
-};
-
-// Import tokens and scheduled tasks configuration
-const importConfig = async ({ file }) => {
-  try {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const importData = JSON.parse(e.target.result);
-
-        // Validate structure
-        if (
-          !importData.version ||
-          !importData.tokens ||
-          !importData.scheduledTasks
-        ) {
-          message.error("无效的配置文件格式");
-          return;
-        }
-
-        let importedTokens = 0;
-        let importedTasks = 0;
-
-        // Import tokens
-        if (Array.isArray(importData.tokens)) {
-          importData.tokens.forEach((token) => {
-            // Check if token already exists
-            const exists = gameTokens.value.some(
-              (t) => t.token === token.token || t.id === token.id,
-            );
-            if (!exists && token.token) {
-              // Add new token directly to gameTokens (useLocalStorage)
-              gameTokens.value.push({
-                id:
-                  token.id ||
-                  "token_" + Date.now() + Math.random().toString(36).slice(2),
-                name: token.name || "",
-                token: token.token,
-                server: token.server || "",
-                wsUrl: token.wsUrl || null,
-                remark: token.remark || "",
-                importMethod: "import",
-                sourceUrl: token.sourceUrl || null,
-                upgradedToPermanent: true,
-                upgradedAt: token.upgradedAt || null,
-                updatedAt: token.updatedAt || new Date().toISOString(),
-                createdAt: new Date().toISOString(),
-                lastUsed: new Date().toISOString(),
-              });
-              importedTokens++;
-            }
-          });
-        }
-
-        // Import scheduled tasks
-        if (Array.isArray(importData.scheduledTasks)) {
-          importData.scheduledTasks.forEach((task) => {
-            // Check if task already exists
-            const exists = scheduledTasks.value.some((t) => t.id === task.id);
-            if (!exists && task.id) {
-              scheduledTasks.value.push(task);
-              importedTasks++;
-            }
-          });
-          saveScheduledTasks();
-        }
-
-        // Import batch settings if provided
-        if (importData.batchSettings) {
-          Object.assign(batchSettings, importData.batchSettings);
-          saveBatchSettings();
-        }
-
-        // Import token settings
-        if (Array.isArray(importData.tokenSettings)) {
-          importData.tokenSettings.forEach((item) => {
-            if (item.tokenId && item.settings) {
-              localStorage.setItem(
-                `daily-settings:${item.tokenId}`,
-                JSON.stringify(item.settings),
-              );
-            }
-          });
-        }
-
-        message.success(
-          `导入成功: ${importedTokens} 个新账号, ${importedTasks} 个新定时任务`,
-        );
-      } catch (parseError) {
-        console.error("Parse error:", parseError);
-        message.error("解析配置文件失败");
-      }
-    };
-    reader.readAsText(file.file);
-  } catch (error) {
-    console.error("Import failed:", error);
-    message.error("导入失败: " + error.message);
-  }
-};
-
-// ======================
 // Scheduled Tasks Countdown
 // ======================
 
@@ -5939,6 +5692,179 @@ const stopBatch = () => {
   -webkit-backdrop-filter: blur(18px) saturate(150%);
 }
 
+.auto-task-hero {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.82fr) minmax(520px, 1.18fr);
+  align-items: stretch;
+  gap: 18px;
+  padding: 22px;
+  border-radius: 22px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.84), rgba(236, 248, 255, 0.62)),
+    rgba(255, 255, 255, 0.72);
+  border-color: rgba(148, 163, 184, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.76),
+    0 18px 44px rgba(15, 23, 42, 0.08);
+}
+
+.auto-task-hero-main {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.55fr) minmax(220px, 1fr);
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+}
+
+.auto-task-title-block {
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  min-width: 0;
+
+  h2 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 26px;
+    font-weight: 850;
+    line-height: 1.1;
+  }
+}
+
+.auto-task-kicker {
+  color: var(--primary-color);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.auto-task-summary-list {
+  display: grid;
+  grid-template-columns: minmax(96px, 0.44fr) minmax(160px, 1fr);
+  gap: 10px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(56, 189, 248, 0.18);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.66);
+}
+
+.auto-task-summary-item {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.56);
+  border: 1px solid rgba(129, 141, 170, 0.18);
+
+  strong {
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 850;
+    line-height: 1.35;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.auto-task-summary-label {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.auto-task-control-board {
+  display: grid;
+  align-content: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--app-line);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.54);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.62);
+}
+
+.auto-task-control-row {
+  display: grid;
+  grid-template-columns: 74px repeat(4, minmax(92px, 1fr));
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.56);
+  border: 1px solid rgba(129, 141, 170, 0.18);
+}
+
+.auto-task-control-row--primary {
+  grid-template-columns: 74px repeat(2, minmax(116px, 1fr));
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  background:
+    linear-gradient(135deg, rgba(56, 189, 248, 0.13), rgba(14, 165, 233, 0.05)),
+    rgba(255, 255, 255, 0.5);
+}
+
+.auto-task-control-label {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.auto-task-control-row :deep(.n-button) {
+  width: 100%;
+  border-radius: 999px;
+  font-weight: 800;
+  min-width: 0;
+}
+
+:global([data-theme="dark"] .auto-task-hero) {
+  background:
+    linear-gradient(135deg, rgba(30, 41, 59, 0.84), rgba(15, 23, 42, 0.92)),
+    #111827;
+  border-color: rgba(148, 163, 184, 0.22);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 18px 44px rgba(0, 0, 0, 0.32);
+}
+
+:global([data-theme="dark"] .auto-task-summary-list) {
+  background: rgba(15, 23, 42, 0.68);
+  border-color: rgba(56, 189, 248, 0.24);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+:global([data-theme="dark"] .auto-task-summary-item),
+:global([data-theme="dark"] .auto-task-control-row) {
+  background: rgba(30, 41, 59, 0.68);
+  border-color: rgba(148, 163, 184, 0.16);
+}
+
+:global([data-theme="dark"] .auto-task-control-board) {
+  background: rgba(15, 23, 42, 0.58);
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+:global([data-theme="dark"] .auto-task-control-row--primary) {
+  background:
+    linear-gradient(135deg, rgba(14, 165, 233, 0.16), rgba(15, 23, 42, 0.72)),
+    rgba(15, 23, 42, 0.72);
+  border-color: rgba(56, 189, 248, 0.28);
+}
+
+:global([data-theme="dark"] .auto-task-control-row .n-button:not(.n-button--primary-type):not(.n-button--error-type):not(.n-button--info-type)) {
+  background: rgba(30, 41, 59, 0.88);
+  border-color: rgba(148, 163, 184, 0.24);
+  color: var(--text-primary);
+}
+
 .token-item {
   display: flex;
   align-items: center;
@@ -6179,7 +6105,7 @@ const stopBatch = () => {
   color: var(--primary-color) !important;
 }
 
-[data-theme="dark"] .log-container {
+:global([data-theme="dark"] .log-container) {
   background: rgba(15, 23, 42, 0.72);
 }
 
@@ -6187,6 +6113,24 @@ const stopBatch = () => {
 @media (max-width: 1200px) {
   .right-column {
     width: 380px;
+  }
+
+  .auto-task-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .auto-task-control-row {
+    grid-template-columns: 74px repeat(4, minmax(88px, 1fr));
+  }
+
+  .auto-task-control-row--primary {
+    grid-template-columns: 74px repeat(2, minmax(112px, 1fr));
+  }
+}
+
+@media (max-width: 1400px) {
+  .auto-task-hero {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -6250,6 +6194,38 @@ const stopBatch = () => {
     flex-direction: column;
     gap: 12px;
     align-items: stretch;
+  }
+
+  .auto-task-hero {
+    grid-template-columns: 1fr;
+    padding: 16px;
+    border-radius: 18px;
+  }
+
+  .auto-task-hero-main {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .auto-task-title-block h2 {
+    font-size: 24px;
+  }
+
+  .auto-task-summary-list {
+    grid-template-columns: 1fr;
+  }
+
+  .auto-task-control-board {
+    border-radius: 18px;
+  }
+
+  .auto-task-control-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border-radius: 16px;
+  }
+
+  .auto-task-control-label {
+    grid-column: 1 / -1;
   }
 
   .page-header .actions {

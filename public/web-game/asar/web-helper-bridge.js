@@ -84,6 +84,214 @@
     }
   }
 
+  function installDefaultMute() {
+    if (params.get("muted") === "0" || window.__XYZW_WEB_HELPER_MUTED) return;
+    window.__XYZW_WEB_HELPER_MUTED = true;
+
+    try {
+      var nativePlay = HTMLMediaElement.prototype.play;
+      HTMLMediaElement.prototype.play = function () {
+        this.muted = true;
+        this.volume = 0;
+        return nativePlay.apply(this, arguments);
+      };
+    } catch (err) {}
+
+    function muteExistingMedia() {
+      try {
+        Array.prototype.forEach.call(
+          document.querySelectorAll("audio, video"),
+          function (media) {
+            media.muted = true;
+            media.volume = 0;
+          },
+        );
+      } catch (err) {}
+    }
+
+    function muteCocosAudio() {
+      try {
+        if (window.cc && window.cc.audioEngine) {
+          if (typeof window.cc.audioEngine.setMusicVolume === "function") {
+            window.cc.audioEngine.setMusicVolume(0);
+          }
+          if (typeof window.cc.audioEngine.setEffectsVolume === "function") {
+            window.cc.audioEngine.setEffectsVolume(0);
+          }
+          if (typeof window.cc.audioEngine.setVolume === "function") {
+            window.cc.audioEngine.setVolume(0);
+          }
+        }
+      } catch (err) {}
+    }
+
+    muteExistingMedia();
+    muteCocosAudio();
+    setTimeout(muteExistingMedia, 0);
+    setTimeout(muteCocosAudio, 0);
+    setTimeout(muteCocosAudio, 500);
+    setTimeout(muteCocosAudio, 1500);
+    setTimeout(muteCocosAudio, 3000);
+  }
+
+  function installEmbeddedChromeHider() {
+    if (params.get("hideChrome") === "0" || window.__XYZW_WEB_HELPER_CHROME_HIDER) return;
+    window.__XYZW_WEB_HELPER_CHROME_HIDER = true;
+
+    var hiddenClass = "xyzw-platform-chrome-hidden";
+    var styleId = "xyzw-platform-chrome-hider-style";
+
+    function installStyle() {
+      if (document.getElementById(styleId)) return;
+      var style = document.createElement("style");
+      style.id = styleId;
+      style.textContent = [
+        "html, body { width: 100% !important; height: 100% !important; overflow: hidden !important; background: #000 !important; }",
+        "#Cocos2dGameContainer, #GameCanvas { top: 0 !important; left: 0 !important; }",
+        "." + hiddenClass + " { display: none !important; visibility: hidden !important; pointer-events: none !important; }",
+      ].join("\n");
+      (document.head || document.documentElement).appendChild(style);
+    }
+
+    function getGameCanvas() {
+      return document.getElementById("GameCanvas");
+    }
+
+    function containsGameCanvas(element) {
+      var gameCanvas = getGameCanvas();
+      return !!gameCanvas && element !== gameCanvas && element.contains(gameCanvas);
+    }
+
+    function isGameElement(element) {
+      if (!element || element.nodeType !== 1) return true;
+      var id = element.id || "";
+      var tag = String(element.tagName || "").toLowerCase();
+      return (
+        id === "GameCanvas" ||
+        id === "Cocos2dGameContainer" ||
+        id === "splash" ||
+        tag === "canvas" ||
+        tag === "script" ||
+        tag === "style" ||
+        tag === "link" ||
+        tag === "audio" ||
+        tag === "video" ||
+        containsGameCanvas(element)
+      );
+    }
+
+    function hasKnownChromeText(element) {
+      var text = String(element.textContent || "").trim();
+      var title = String(document.title || "").trim();
+      var playerName = String(account.name || "").trim();
+      if (!text) return false;
+      return (
+        (!!title && text.indexOf(title) !== -1) ||
+        (!!playerName && text.indexOf(playerName) !== -1)
+      );
+    }
+
+    function looksLikeTopChrome(element) {
+      if (isGameElement(element)) return false;
+      var rect;
+      var computed;
+      try {
+        rect = element.getBoundingClientRect();
+        computed = window.getComputedStyle(element);
+      } catch (err) {
+        return false;
+      }
+
+      var viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+      var isTopStrip =
+        rect.top <= 8 &&
+        rect.bottom >= 24 &&
+        rect.height >= 28 &&
+        rect.height <= 96 &&
+        rect.width >= Math.min(viewportWidth * 0.5, 260);
+      var isFloating =
+        computed.position === "fixed" ||
+        computed.position === "absolute" ||
+        computed.position === "sticky";
+      var hasControls = !!element.querySelector("button, select, img, svg");
+
+      return isTopStrip && (hasKnownChromeText(element) || isFloating || hasControls);
+    }
+
+    function findTopChromeCandidate(element) {
+      var current = element;
+      var best = null;
+      var depth = 0;
+      while (current && current !== document.body && current !== document.documentElement && depth < 8) {
+        if (current.nodeType === 1 && !containsGameCanvas(current) && looksLikeTopChrome(current)) {
+          best = current;
+        }
+        current = current.parentElement;
+        depth += 1;
+      }
+      return best;
+    }
+
+    function pinGameToTop() {
+      var container = document.getElementById("Cocos2dGameContainer");
+      var canvas = document.getElementById("GameCanvas");
+      if (container) {
+        container.style.top = "0px";
+        container.style.left = "0px";
+      }
+      if (canvas) {
+        canvas.style.top = "0px";
+        canvas.style.left = "0px";
+      }
+    }
+
+    function hideChromeElements() {
+      installStyle();
+      pinGameToTop();
+      if (!document.body) return;
+      Array.prototype.forEach.call(document.body.querySelectorAll("*"), function (element) {
+        if (!looksLikeTopChrome(element)) return;
+        element.classList.add(hiddenClass);
+        element.setAttribute("aria-hidden", "true");
+      });
+      hideChromeFromTopPoints();
+    }
+
+    function hideChromeFromTopPoints() {
+      if (typeof document.elementsFromPoint !== "function") return;
+      var viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+      var xPoints = [
+        8,
+        Math.max(8, Math.round(viewportWidth * 0.25)),
+        Math.max(8, Math.round(viewportWidth * 0.5)),
+        Math.max(8, Math.round(viewportWidth * 0.75)),
+        Math.max(8, viewportWidth - 8),
+      ];
+      var yPoints = [6, 18, 32, 44];
+      xPoints.forEach(function (x) {
+        yPoints.forEach(function (y) {
+          Array.prototype.forEach.call(document.elementsFromPoint(x, y), function (element) {
+            var candidate = findTopChromeCandidate(element);
+            if (!candidate) return;
+            candidate.classList.add(hiddenClass);
+            candidate.setAttribute("aria-hidden", "true");
+          });
+        });
+      });
+    }
+
+    hideChromeElements();
+    setTimeout(hideChromeElements, 0);
+    setTimeout(hideChromeElements, 250);
+    setTimeout(hideChromeElements, 1000);
+    setTimeout(hideChromeElements, 2500);
+
+    if (window.MutationObserver && document.body) {
+      var observer = new MutationObserver(hideChromeElements);
+      observer.observe(document.body, { childList: true, subtree: true });
+    }
+  }
+
   var authUser = decodeJsonParam(params.get("authUser"));
   var token =
     params.get("token") ||
@@ -568,6 +776,8 @@
   window.__XYZW_WEB_HELPER_WS_PAYLOAD = buildWsLoginPayload;
   window.__XYZW_INSTALL_GAME_RUNTIME_PATCH = installGameRuntimePatch;
 
+  installDefaultMute();
+  installEmbeddedChromeHider();
   installWebSocketBridge();
   installHortorSdkBridge();
   installHsdkBridge();

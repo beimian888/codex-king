@@ -274,7 +274,7 @@ onMounted(() => {
 }
 
 /* 深色主题下背景 */
-[data-theme="dark"] .login-page {
+:global([data-theme="dark"] .login-page) {
   background: linear-gradient(135deg, #0f172a 0%, #1f2937 100%);
 }
 
@@ -297,7 +297,7 @@ onMounted(() => {
 }
 
 /* 深色主题下登录卡片 */
-[data-theme="dark"] .login-card {
+:global([data-theme="dark"] .login-card) {
   background: rgba(17, 24, 39, 0.85);
   border-color: rgba(255, 255, 255, 0.1);
 }

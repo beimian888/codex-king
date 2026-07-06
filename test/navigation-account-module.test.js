@@ -163,7 +163,10 @@ assert(
 );
 
 const gameHeaderActions = gameFeatures.indexOf('class="header-actions"');
-const gameConnectionStatus = gameFeatures.indexOf('class="connection-status"', gameHeaderActions);
+const gameConnectionStatus = gameFeatures.indexOf(
+  'class="connection-status-button"',
+  gameHeaderActions,
+);
 assert(
   gameHeaderActions !== -1 && gameConnectionStatus !== -1,
   "game feature header must keep the connection status control",

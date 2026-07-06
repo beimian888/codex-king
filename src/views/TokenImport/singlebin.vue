@@ -1,54 +1,18 @@
 <template>
-  <!-- 手动输入表单 -->
-  <n-form :model="importForm" :label-placement="'top'" :size="'large'" :show-label="true">
-    <n-form-item :label="'游戏角色名称'" :show-label="true">
-      <n-input v-model:value="importForm.name" placeholder="例如：主号战士" clearable />
-    </n-form-item>
-
+  <n-form class="single-bin-import-form" :label-placement="'top'" :size="'large'" :show-label="true">
     <n-form-item :label="'bin文件'" :show-label="true">
-      <a-upload multiple accept="*.bin,*.dmp" @before-upload="uploadBin" draggable dropzone placeholder="粘贴Token字符串..."
+      <a-upload
+        class="single-bin-upload"
+        accept="*.bin,*.dmp"
+        @before-upload="uploadBin"
+        draggable
+        dropzone
+        placeholder="点击或拖拽bin文件到此处上传"
         clearable>
-        <!-- <div class="dropzone-content">
-          请点击上传或将bind文件拖拽到此处
-        </div> -->
       </a-upload>
     </n-form-item>
-    <a-list>
-      <a-list-item v-for="(role, index) in roleList" :key="index">
-        <div>
-          <strong>角色名称:</strong> {{ role.name || "未命名角色" }}<br />
-          <strong>Token:</strong>
-          <span style="word-break: break-all">{{ role.token }}</span><br />
-          <strong>服务器:</strong> {{ role.server || "未指定" }}
-        </div>
-      </a-list-item>
-    </a-list>
-
-    <!-- 角色详情 -->
-    <n-collapse>
-      <n-collapse-item title="角色详情 (可选)" name="optional">
-        <div class="optional-fields">
-          <n-form-item label="服务器">
-            <n-input v-model:value="importForm.server" placeholder="服务器名称" />
-          </n-form-item>
-
-          <n-form-item label="自定义连接地址">
-            <n-input v-model:value="importForm.wsUrl" placeholder="留空使用默认连接" />
-          </n-form-item>
-        </div>
-      </n-collapse-item>
-    </n-collapse>
 
     <div class="form-actions">
-      <n-button type="primary" size="large" block :loading="isImporting" @click="handleImport">
-        <template #icon>
-          <n-icon>
-            <CloudUpload />
-          </n-icon>
-        </template>
-        添加Token
-      </n-button>
-
       <n-button v-if="tokenStore.hasTokens" size="large" block @click="cancel">
         取消
       </n-button>
@@ -57,18 +21,12 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, reactive } from "vue";
 import { useTokenStore } from "@/stores/tokenStore";
-import { CloudUpload } from "@vicons/ionicons5";
 
 import {
   NForm,
   NFormItem,
-  NInput,
   NButton,
-  NIcon,
-  NCollapse,
-  NCollapseItem,
   useMessage,
 } from "naive-ui";
 
@@ -81,29 +39,11 @@ const $emit = defineEmits(["cancel", "ok"]);
 const { storeArrayBuffer } = useIndexedDB();
 
 const cancel = () => {
-  roleList.value = [];
   $emit("cancel");
 };
 
 const tokenStore = useTokenStore();
 const message = useMessage();
-const isImporting = ref(false);
-const importForm = reactive({
-  name: "",
-  server: "",
-  wsUrl: "",
-  importMethod: "",
-});
-const roleList = ref<
-  Array<{
-    id: string;
-    name: string;
-    token: string;
-    server: string;
-    wsUrl: string;
-    importMethod: string;
-  }>
->([]);
 
 const tQueue = new PQueue({ concurrency: 1, interval: 1000 });
 
@@ -113,7 +53,6 @@ const initName = (fileName: string) => {
   let binRes = fileName.match(/^bin-(.*?)服-([0-2])-([0-9]{6,12})-(.*)\.bin$/);
   console.log(binRes);
   if (binRes) {
-    importForm.name = `${binRes[1]}_${binRes[2]}_${binRes[4]}`;
     return {
       server: binRes[1],
       roleIndex: binRes[2],
@@ -125,111 +64,203 @@ const initName = (fileName: string) => {
     server: "",
     roleIndex: "",
     roleId: "",
-    roleName: importForm.name || "",
+    roleName: "",
   };
+};
+
+const readFileAsArrayBuffer = (file: File) =>
+  new Promise<ArrayBuffer>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event) => resolve(event.target?.result as ArrayBuffer);
+    reader.onerror = () => reject(new Error("读取文件失败，请重试"));
+    reader.readAsArrayBuffer(file);
+  });
+
+const addSingleBinToken = async (role: {
+  id: string;
+  name: string;
+  token: string;
+  server: string;
+  wsUrl: string;
+  importMethod: string;
+}) => {
+  const gameToken = tokenStore.gameTokens.find((t) => t.id === role.id);
+  let tokenId = role.id;
+  if (gameToken) {
+    tokenStore.updateToken(gameToken.id, {
+      ...role,
+    });
+    tokenId = gameToken.id;
+  } else {
+    const token = tokenStore.addToken({
+      ...role,
+    });
+    tokenId = token.id;
+  }
+  void tokenStore.fetchTokenAvatar(tokenId);
 };
 
 const uploadBin = (binFile: File) => {
   tQueue.add(async () => {
-    console.log("上传文件数据:", binFile);
-    const roleMeta = initName(binFile.name) as any;
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const userToken = e.target?.result as ArrayBuffer;
-      // console.log('转换Token:', userToken);
+    try {
+      const roleMeta = initName(binFile.name) as any;
+      const userToken = await readFileAsArrayBuffer(binFile);
       const tokenId = getTokenId(userToken);
       const roleToken = await transformToken(userToken);
       const roleName = roleMeta.roleName || binFile.name.split(".")?.[0] || "";
-      // 刷新indexDB数据库token数据
       const saved = await storeArrayBuffer(tokenId, userToken);
       if (!saved) {
         message.error("保存BIN数据到IndexedDB失败");
         return;
       }
-      
-      // 上传列表中发现已存在的重复名称，提示消息
-      if (roleList.value.some((role) => role.id === tokenId)) {
-        message.error("上传列表中已存在同名角色! ");
-        return;
-      }
-      // 检查待上传的角色是否已在tokenStore中存在
-      const existingToken = tokenStore.gameTokens.find(
-        (t) => t.id === tokenId,
-      );
-      if (existingToken) {
-        message.warning(`角色"${roleName}"已存在，将更新该角色的Token`);
-      }
-      message.success("Token读取成功，请检查角色名称等信息后提交");
-      roleList.value.push({
+
+      await addSingleBinToken({
         id: tokenId,
         token: roleToken,
         name: roleName,
         server: roleMeta.server + "" + roleMeta.roleIndex || "",
-        wsUrl: importForm.wsUrl || "",
+        wsUrl: "",
         importMethod: "bin",
       });
-    };
-    reader.onerror = () => {
-      message.error("读取文件失败，请重试");
-    };
-    reader.readAsArrayBuffer(binFile);
-  });
-  return false; // 阻止自动上传
-};
 
-const handleImport = async () => {
-  if (roleList.value.length === 0) {
-    message.error("请先上传bin文件！");
-    return;
-  }
-  roleList.value.forEach((role) => {
-    // tokenStore.gameTokens中发现已存在的重复名称，则移出token后重新添加
-    const gameToken = tokenStore.gameTokens.find((t) => t.id === role.id);
-    if (gameToken) {
-      console.log("移除同名token:", gameToken);
-      // tokenStore.removeToken(gameToken.id);
-      tokenStore.updateToken(gameToken.id, {
-        ...role,
-      });
-    } else {
-      tokenStore.addToken({
-        ...role,
-      });
+      message.success("账号添加成功");
+      $emit("ok");
+    } catch (error: any) {
+      message.error(error?.message || "读取文件失败，请重试");
     }
   });
-  console.log("当前Token列表:", tokenStore.gameTokens);
-  message.success("Token添加成功");
-  roleList.value = [];
-  $emit("ok");
+  return false; // 阻止自动上传
 };
 </script>
 
 <style scoped lang="scss">
-.optional-fields {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
+.single-bin-import-form {
+  color: var(--account-ink, #172033);
+}
 
-  n-form-item {
-    flex: 1;
-    min-width: 200px;
-  }
+.single-bin-import-form :deep(.n-form-item-label),
+.single-bin-import-form :deep(.n-form-item-label__text) {
+  color: var(--account-ink, #172033);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.single-bin-upload {
+  width: 100%;
+}
+
+.single-bin-upload :deep(.arco-upload) {
+  width: 100%;
+}
+
+.single-bin-upload :deep(.arco-upload-drag) {
+  min-height: 190px;
+  padding: 42px 22px;
+  border: 1px dashed rgba(14, 165, 233, 0.34);
+  border-radius: 22px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.62), rgba(241, 247, 253, 0.44)),
+    rgba(255, 255, 255, 0.38);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 16px 34px rgba(42, 54, 86, 0.08);
+  color: var(--account-ink, #172033);
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease,
+    background 180ms ease;
+}
+
+.single-bin-upload :deep(.arco-upload-drag:hover),
+.single-bin-upload :deep(.arco-upload-drag-active) {
+  border-color: rgba(14, 165, 233, 0.68);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.76), rgba(236, 248, 255, 0.58)),
+    rgba(255, 255, 255, 0.48);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 18px 38px rgba(14, 165, 233, 0.16);
+  transform: translateY(-1px);
+}
+
+.single-bin-upload :deep(.arco-icon-plus) {
+  color: #0ea5e9;
+  font-size: 24px;
+  filter: drop-shadow(0 8px 18px rgba(14, 165, 233, 0.22));
+}
+
+.single-bin-upload :deep(.arco-upload-drag-text) {
+  color: var(--account-ink, #172033);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.single-bin-upload :deep(.arco-upload-tip) {
+  color: var(--account-muted, #667085);
+  font-size: 13px;
 }
 
 .form-actions {
-  margin-top: 24px;
+  margin-top: 18px;
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
 
-.dropzone-content {
-  width: 100%;
-  border: 1px dashed #fcc;
-  border-radius: 8px;
-  text-align: center;
-  color: #888;
-  padding: 40px 20px;
-  font-size: 12px;
+.form-actions :deep(.n-button) {
+  min-height: 44px;
+  border-radius: 999px;
+  font-weight: 800;
+  background: rgba(255, 255, 255, 0.58);
+  border-color: rgba(129, 141, 170, 0.24);
+  color: var(--account-ink, #172033);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78);
+}
+
+:global([data-theme="dark"] .single-bin-import-form) {
+  color: var(--account-ink, #f8fafc);
+}
+
+:global([data-theme="dark"] .single-bin-import-form .n-form-item-label),
+:global([data-theme="dark"] .single-bin-import-form .n-form-item-label__text) {
+  color: var(--account-ink, #f8fafc) !important;
+}
+
+:global([data-theme="dark"] .single-bin-upload .arco-upload-drag) {
+  border-color: rgba(56, 189, 248, 0.28);
+  background:
+    linear-gradient(145deg, rgba(30, 41, 59, 0.84), rgba(15, 23, 42, 0.92)),
+    rgba(15, 23, 42, 0.86);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 18px 38px rgba(0, 0, 0, 0.3);
+  color: var(--account-ink, #f8fafc);
+}
+
+:global([data-theme="dark"] .single-bin-upload .arco-upload-drag:hover),
+:global([data-theme="dark"] .single-bin-upload .arco-upload-drag-active) {
+  border-color: rgba(56, 189, 248, 0.58);
+  background:
+    linear-gradient(145deg, rgba(30, 41, 59, 0.92), rgba(15, 23, 42, 0.96)),
+    rgba(15, 23, 42, 0.92);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 20px 42px rgba(14, 165, 233, 0.12);
+}
+
+:global([data-theme="dark"] .single-bin-upload .arco-upload-drag-text) {
+  color: var(--account-ink, #f8fafc);
+}
+
+:global([data-theme="dark"] .single-bin-upload .arco-upload-tip) {
+  color: var(--account-muted, #b6c2d2);
+}
+
+:global([data-theme="dark"] .single-bin-import-form .form-actions .n-button) {
+  background: rgba(30, 41, 59, 0.88);
+  border-color: rgba(148, 163, 184, 0.26);
+  color: var(--account-ink, #f8fafc);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 </style>

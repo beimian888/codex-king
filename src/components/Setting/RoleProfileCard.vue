@@ -603,7 +603,7 @@ watch(wsStatus, async (newStatus) => {
 }
 
 // 深色主题优化
-[data-theme="dark"] .role-profile-card {
+:global([data-theme="dark"] .role-profile-card) {
   background: linear-gradient(
     135deg,
     var(--bg-secondary) 0%,
