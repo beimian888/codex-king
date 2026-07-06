@@ -1,8 +1,10 @@
 import random
 import sqlite3
 import string
+import os
 from contextlib import contextmanager
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -29,68 +31,75 @@ def _response(success, message, **data):
 
 
 class SystemDatabase:
-    def __init__(self, db_path: str):
+    def __init__(self, db_path: str | None = None, *, engine: str = "sqlite", config: dict | None = None):
         self.db_path = db_path
+        self.engine = engine
+        self.config = config or {}
+
+    @staticmethod
+    def load_env_file(env_file=None):
+        env_path = Path(env_file) if env_file else Path(__file__).resolve().parent / ".env"
+        if not env_path.exists():
+            return
+
+        for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+    @classmethod
+    def from_env(cls, env_file=None):
+        cls.load_env_file(env_file)
+        return cls(
+            engine="mysql",
+            config={
+                "host": os.environ.get("DB_HOST", "127.0.0.1"),
+                "port": int(os.environ.get("DB_PORT", "3306")),
+                "database": os.environ.get("DB_NAME", "xyzw_system"),
+                "user": os.environ.get("DB_USER", "xyzw_system"),
+                "password": os.environ.get("DB_PASSWORD", ""),
+            },
+        )
 
     @contextmanager
     def _connect(self):
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
+        if self.engine == "mysql":
+            conn = self._connect_mysql()
+        else:
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
         try:
             yield conn
             conn.commit()
         finally:
             conn.close()
 
+    def _connect_mysql(self):
+        import pymysql
+        import pymysql.cursors
+
+        return MySqlConnectionAdapter(
+            pymysql.connect(
+                host=self.config["host"],
+                port=self.config["port"],
+                user=self.config["user"],
+                password=self.config["password"],
+                database=self.config["database"],
+                charset="utf8mb4",
+                cursorclass=pymysql.cursors.DictCursor,
+                autocommit=False,
+            )
+        )
+
     def init_schema(self) -> None:
         with self._connect() as conn:
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS users (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    username TEXT NOT NULL UNIQUE,
-                    password_hash TEXT NOT NULL,
-                    role TEXT NOT NULL,
-                    card_key TEXT,
-                    level TEXT,
-                    expires_at TEXT,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    last_login_at TEXT
-                )
-                """
-            )
+            if self.engine == "mysql":
+                self._init_mysql_schema(conn)
+            else:
+                self._init_sqlite_schema(conn)
             self._ensure_user_columns(conn)
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS license_cards (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    card_key TEXT NOT NULL UNIQUE,
-                    level TEXT NOT NULL,
-                    remark TEXT DEFAULT '',
-                    status TEXT NOT NULL,
-                    user TEXT,
-                    used_at TEXT,
-                    expires_at TEXT,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    created_by TEXT NOT NULL
-                )
-                """
-            )
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS admin_card_quotas (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    admin_user_id INTEGER NOT NULL,
-                    level TEXT NOT NULL,
-                    quota INTEGER NOT NULL DEFAULT 0,
-                    used INTEGER NOT NULL DEFAULT 0,
-                    UNIQUE(admin_user_id, level),
-                    FOREIGN KEY(admin_user_id) REFERENCES users(id)
-                )
-                """
-            )
 
             existing = conn.execute(
                 "SELECT id FROM users WHERE username = ?", (SUPER_ADMIN_USERNAME,)
@@ -111,6 +120,109 @@ class SystemDatabase:
                         None,
                     ),
                 )
+
+    def _init_sqlite_schema(self, conn):
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL UNIQUE,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL,
+                card_key TEXT,
+                level TEXT,
+                expires_at TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                last_login_at TEXT
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS license_cards (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                card_key TEXT NOT NULL UNIQUE,
+                level TEXT NOT NULL,
+                remark TEXT DEFAULT '',
+                status TEXT NOT NULL,
+                user TEXT,
+                used_at TEXT,
+                expires_at TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                created_by TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS admin_card_quotas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                admin_user_id INTEGER NOT NULL,
+                level TEXT NOT NULL,
+                quota INTEGER NOT NULL DEFAULT 0,
+                used INTEGER NOT NULL DEFAULT 0,
+                UNIQUE(admin_user_id, level),
+                FOREIGN KEY(admin_user_id) REFERENCES users(id)
+            )
+            """
+        )
+
+    def _init_mysql_schema(self, conn):
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id INT NOT NULL AUTO_INCREMENT,
+                username VARCHAR(191) NOT NULL UNIQUE,
+                password_hash VARCHAR(255) NOT NULL,
+                role VARCHAR(32) NOT NULL,
+                card_key VARCHAR(64),
+                level VARCHAR(32),
+                expires_at VARCHAR(32),
+                created_at VARCHAR(32) NOT NULL,
+                updated_at VARCHAR(32) NOT NULL,
+                last_login_at VARCHAR(32),
+                PRIMARY KEY (id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS license_cards (
+                id INT NOT NULL AUTO_INCREMENT,
+                card_key VARCHAR(64) NOT NULL UNIQUE,
+                level VARCHAR(32) NOT NULL,
+                remark TEXT,
+                status VARCHAR(32) NOT NULL,
+                user VARCHAR(191),
+                used_at VARCHAR(32),
+                expires_at VARCHAR(32),
+                created_at VARCHAR(32) NOT NULL,
+                updated_at VARCHAR(32) NOT NULL,
+                created_by VARCHAR(191) NOT NULL,
+                PRIMARY KEY (id),
+                INDEX idx_license_cards_created_by (created_by),
+                INDEX idx_license_cards_status (status)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS admin_card_quotas (
+                id INT NOT NULL AUTO_INCREMENT,
+                admin_user_id INT NOT NULL,
+                level VARCHAR(32) NOT NULL,
+                quota INT NOT NULL DEFAULT 0,
+                used INT NOT NULL DEFAULT 0,
+                PRIMARY KEY (id),
+                UNIQUE KEY uq_admin_level (admin_user_id, level),
+                CONSTRAINT fk_admin_card_quotas_user
+                    FOREIGN KEY (admin_user_id) REFERENCES users(id)
+                    ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """
+        )
 
     def login_user(self, username: str, password: str) -> dict:
         with self._connect() as conn:
@@ -511,13 +623,24 @@ class SystemDatabase:
                 return card_key
 
     def _ensure_user_columns(self, conn):
-        columns = {row["name"] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
+        if self.engine == "mysql":
+            columns = {
+                row["Field"]
+                for row in conn.execute("SHOW COLUMNS FROM users").fetchall()
+            }
+        else:
+            columns = {row["name"] for row in conn.execute("PRAGMA table_info(users)").fetchall()}
         if "card_key" not in columns:
-            conn.execute("ALTER TABLE users ADD COLUMN card_key TEXT")
+            conn.execute(self._add_user_column_sql("card_key"))
         if "level" not in columns:
-            conn.execute("ALTER TABLE users ADD COLUMN level TEXT")
+            conn.execute(self._add_user_column_sql("level"))
         if "expires_at" not in columns:
-            conn.execute("ALTER TABLE users ADD COLUMN expires_at TEXT")
+            conn.execute(self._add_user_column_sql("expires_at"))
+
+    def _add_user_column_sql(self, column_name):
+        if self.engine == "mysql":
+            return f"ALTER TABLE users ADD COLUMN {column_name} VARCHAR(64)"
+        return f"ALTER TABLE users ADD COLUMN {column_name} TEXT"
 
     def _calculate_expires_at(self, used_at, level):
         return (_parse_dt(used_at) + timedelta(days=LICENSE_DURATION_DAYS[level])).strftime(
@@ -569,3 +692,19 @@ class SystemDatabase:
             """,
             (card_key, level, expires_at, updated_at, username, ROLE_USER),
         )
+
+
+class MySqlConnectionAdapter:
+    def __init__(self, conn):
+        self.conn = conn
+
+    def execute(self, sql, params=None):
+        cursor = self.conn.cursor()
+        cursor.execute(sql.replace("?", "%s"), params or ())
+        return cursor
+
+    def commit(self):
+        self.conn.commit()
+
+    def close(self):
+        self.conn.close()

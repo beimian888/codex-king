@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 import sqlite3
 from contextlib import closing
+from unittest.mock import Mock, patch
 
 from server.app import create_app
 
@@ -217,6 +218,18 @@ class SystemApiTest(unittest.TestCase):
         session = self.client.get("/api/auth/session")
         self.assertEqual(session.status_code, 401)
         self.assertFalse(session.get_json()["success"])
+
+    def test_create_app_uses_mysql_env_by_default(self):
+        fake_db = Mock()
+        fake_db.init_schema.return_value = None
+
+        with patch("server.app.SystemDatabase") as database_class:
+            database_class.from_env.return_value = fake_db
+            app = create_app(init_schema=False)
+
+        self.assertIsNotNone(app)
+        database_class.from_env.assert_called_once_with()
+        fake_db.init_schema.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 import sqlite3
+from unittest.mock import patch
 
 from server.system_database import LICENSE_LEVELS, SystemDatabase
 
@@ -325,6 +326,48 @@ class SystemDatabaseTest(unittest.TestCase):
         self.assertTrue(deleted["success"])
         self.assertEqual(deleted["data"]["admin"]["username"], "manager")
         self.assertFalse(any(admin["username"] == "manager" for admin in admins["data"]["admins"]))
+
+    def test_from_env_builds_mysql_config_for_server_deploy(self):
+        with patch.dict(
+            "os.environ",
+            {
+                "DB_HOST": "127.0.0.1",
+                "DB_PORT": "3306",
+                "DB_NAME": "xyzw_system",
+                "DB_USER": "xyzw_system",
+                "DB_PASSWORD": "secret",
+            },
+            clear=True,
+        ):
+            db = SystemDatabase.from_env()
+
+        self.assertEqual(db.engine, "mysql")
+        self.assertEqual(db.config["host"], "127.0.0.1")
+        self.assertEqual(db.config["port"], 3306)
+        self.assertEqual(db.config["database"], "xyzw_system")
+        self.assertEqual(db.config["user"], "xyzw_system")
+        self.assertEqual(db.config["password"], "secret")
+
+    def test_from_env_can_read_dotenv_file(self):
+        env_path = Path(self.temp_dir.name) / ".env"
+        env_path.write_text(
+            "\n".join(
+                [
+                    "DB_HOST=127.0.0.1",
+                    "DB_PORT=3307",
+                    "DB_NAME=xyzw_system",
+                    "DB_USER=xyzw_system",
+                    "DB_PASSWORD=from_file",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        with patch.dict("os.environ", {}, clear=True):
+            db = SystemDatabase.from_env(env_path)
+
+        self.assertEqual(db.config["port"], 3307)
+        self.assertEqual(db.config["password"], "from_file")
 
 
 if __name__ == "__main__":

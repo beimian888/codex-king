@@ -7,16 +7,22 @@ from flask_cors import CORS
 from server.system_database import SystemDatabase
 
 
-def create_app(db_path: str | None = None) -> Flask:
+def create_app(db_path: str | None = None, *, init_schema: bool = True) -> Flask:
+    SystemDatabase.load_env_file()
+
     app = Flask(__name__)
     CORS(app, supports_credentials=True)
     app.secret_key = os.environ.get("XYZW_SECRET_KEY", "xyzw-dev-secret-key")
 
-    resolved_db_path = Path(db_path) if db_path else Path(__file__).resolve().parent / "data" / "system.db"
-    resolved_db_path.parent.mkdir(parents=True, exist_ok=True)
+    if db_path:
+        resolved_db_path = Path(db_path)
+        resolved_db_path.parent.mkdir(parents=True, exist_ok=True)
+        db = SystemDatabase(str(resolved_db_path))
+    else:
+        db = SystemDatabase.from_env()
 
-    db = SystemDatabase(str(resolved_db_path))
-    db.init_schema()
+    if init_schema:
+        db.init_schema()
 
     def current_user():
         return session.get("user")
